@@ -15,6 +15,7 @@
     "started_at",
     "completed_at",
     "status",
+    "output_trust",
     "output",
     "error",
     "side_effects"
@@ -31,6 +32,7 @@
     "started_at": {"type": "string", "format": "date-time"},
     "completed_at": {"type": "string", "format": "date-time"},
     "status": {"enum": ["succeeded", "failed", "partial"]},
+    "output_trust": {"enum": ["unclassified", "trusted", "untrusted"]},
     "output": {},
     "error": {"type": ["string", "null"]},
     "side_effects": {

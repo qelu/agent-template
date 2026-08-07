@@ -52,6 +52,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
 
         result = boundary.execute(control)
         self.assertEqual(result.status, "succeeded")
+        self.assertEqual(result.output_trust, "unclassified")
         self.assertEqual(result.output["nested"]["count"], 1)
         self.assertEqual(result.run_id, control.event.run_id)
         self.assertEqual(result.tool_call_id, control.event.tool_call_id)
@@ -91,7 +92,8 @@ class RuntimeBoundaryTests(unittest.TestCase):
         if expected:
             run = boundary.start_run()
             control = boundary.prepare_tool_call(run, "inspect", {"value": 1})
-            self.assertEqual(boundary.execute(control).status, "succeeded")
+            self.assertEqual(control.state, ControlState.BLOCKED)
+            self.assertIn("not in the trusted registry", control.reason)
 
     def test_runtime_hooks_require_an_adapter(self) -> None:
         boundary = RuntimeBoundary(None)

@@ -1,31 +1,44 @@
-import sys
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-
-from harness.policy import evaluate_tool_call  # noqa: E402
+from harness.policy import PolicyError, authorization_requirement, load_policy
 
 
 class PolicyTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.root = Path(__file__).resolve().parent.parent
+        self.policy = {
+            "authorization": {
+                "read_only": "autonomous",
+                "destructive_change": "explicit_approval",
+            }
+        }
 
-    def test_read_only_is_allowed(self) -> None:
-        decision = evaluate_tool_call(self.root, {"action_class": "read_only"})
-        self.assertTrue(decision.allowed)
-
-    def test_destructive_requires_approval(self) -> None:
-        decision = evaluate_tool_call(self.root, {"action_class": "destructive_change"})
-        self.assertFalse(decision.allowed)
-
-    def test_denied_pattern_wins_even_with_approval(self) -> None:
-        decision = evaluate_tool_call(
-            self.root,
-            {"command": "rm -rf /", "action_class": "destructive_change", "explicit_approval": True},
+    def test_reads_only_trusted_authorization_configuration(self) -> None:
+        self.assertEqual(
+            authorization_requirement(self.policy, "read_only"), "autonomous"
         )
-        self.assertFalse(decision.allowed)
+        self.assertEqual(
+            authorization_requirement(self.policy, "destructive_change"),
+            "explicit_approval",
+        )
+
+    def test_repository_policy_has_separate_read_and_write_roots(self) -> None:
+        root = Path(__file__).resolve().parent.parent
+        policy = load_policy(root)
+        self.assertIn("read_roots", policy["scope"])
+        self.assertIn("write_roots", policy["scope"])
+
+    def test_unknown_classification_fails_closed(self) -> None:
+        with self.assertRaisesRegex(PolicyError, "Unknown authorization"):
+            authorization_requirement(self.policy, "model_supplied_classification")
+
+    def test_caller_approval_fields_are_not_part_of_the_policy_api(self) -> None:
+        with self.assertRaises(TypeError):
+            authorization_requirement(  # type: ignore[call-arg]
+                self.policy,
+                "read_only",
+                explicit_approval=True,
+            )
 
 
 if __name__ == "__main__":

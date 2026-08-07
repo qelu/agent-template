@@ -11,13 +11,16 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from harness.configuration import ConfigurationError, load_yaml  # noqa: E402
+from harness.approvals import ApprovalError, ApprovalStore  # noqa: E402
 from harness.deployment import (  # noqa: E402
     DeploymentError,
     load_deployment,
     validate_runtime_activation,
 )
 from harness.registry import CapabilityError, load_capabilities  # noqa: E402
+from harness.policy import PolicyError, load_policy  # noqa: E402
 from harness.runtime import RuntimeBoundaryError, validate_runtime_schemas  # noqa: E402
+from harness.tool_policy import ToolPolicyError, load_tool_policies  # noqa: E402
 
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
 TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".toml", ".py"}
@@ -39,11 +42,19 @@ REQUIRED = (
     "config/policies.yaml",
     "config/schemas/capability.schema.json",
     "config/schemas/deployment.schema.json",
+    "config/schemas/approval.schema.json",
     "config/schemas/post-tool-event.schema.json",
+    "config/schemas/policy.schema.json",
     "config/schemas/pre-tool-event.schema.json",
+    "config/schemas/tool-policy.schema.json",
+    "config/tools.yaml",
+    "harness/approvals.py",
+    "harness/guarded_runtime.py",
+    "harness/guardrails.py",
     "harness/reference_adapter.py",
     "harness/runtime.py",
     "harness/runtime_factory.py",
+    "harness/tool_policy.py",
     "scripts/initialize_agent.py",
     "scripts/create_extension.py",
 )
@@ -122,6 +133,21 @@ def main() -> int:
     try:
         validate_runtime_schemas(ROOT)
     except (RuntimeBoundaryError, OSError, ValueError) as exc:
+        errors.append(str(exc))
+
+    try:
+        load_tool_policies(ROOT)
+    except (ToolPolicyError, ConfigurationError, OSError, ValueError) as exc:
+        errors.append(str(exc))
+
+    try:
+        load_policy(ROOT)
+    except (PolicyError, ConfigurationError, OSError, ValueError) as exc:
+        errors.append(str(exc))
+
+    try:
+        ApprovalStore(ROOT)
+    except (ApprovalError, OSError, ValueError) as exc:
         errors.append(str(exc))
 
     registered_skill_paths = {

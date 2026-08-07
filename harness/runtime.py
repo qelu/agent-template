@@ -49,7 +49,7 @@ class PreToolEvent:
     actor: str
 
     def to_dict(self) -> dict[str, Any]:
-        return json.loads(json.dumps(asdict(self)))
+        return json.loads(json.dumps(asdict(self), allow_nan=False))
 
 
 @dataclass(frozen=True)
@@ -65,12 +65,13 @@ class PostToolEvent:
     started_at: str
     completed_at: str
     status: str
+    output_trust: str
     output: Any
     error: str | None
     side_effects: tuple[SideEffect, ...]
 
     def to_dict(self) -> dict[str, Any]:
-        return json.loads(json.dumps(asdict(self)))
+        return json.loads(json.dumps(asdict(self), allow_nan=False))
 
 
 @dataclass(frozen=True)
@@ -167,6 +168,10 @@ class RuntimeBoundary:
         _validate_correlation(control.event, result)
         return result
 
+    def validate_event(self, event: PreToolEvent | PostToolEvent) -> None:
+        """Validate a derived event against this boundary's configured schemas."""
+        validate_runtime_event(self._schema_root, event)
+
     def _require_adapter(self) -> RuntimeAdapter:
         if self._adapter is None:
             raise RuntimeBoundaryError("Runtime hooks require a configured adapter")
@@ -244,7 +249,9 @@ def _required(value: str, field: str) -> str:
 
 
 def _snapshot(event: PreToolEvent) -> str:
-    return json.dumps(event.to_dict(), sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        event.to_dict(), sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
 
 
 def _validate_correlation(pre: PreToolEvent, post: PostToolEvent) -> None:
@@ -269,7 +276,7 @@ def _validate_correlation(pre: PreToolEvent, post: PostToolEvent) -> None:
 
 
 def _json_snapshot(value: dict[str, Any]) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def _validate_timestamp(value: str, event_name: str, field: str) -> datetime:

@@ -1,6 +1,6 @@
 # Reusable AI Agent Template
 
-This repository creates minimal, governed agent harnesses. The default output contains one agent contract, one canonical capability registry, executable configuration validation, four concise skills, extension scaffolding, and tests. Optional operational examples are kept in this source repository and are not copied into new agents.
+This repository creates minimal, governed agent harnesses. The default output contains one agent contract, canonical capability and tool-policy registries, executable configuration validation, four concise skills, extension scaffolding, and tests. Optional operational examples are kept in this source repository and are not copied into new agents.
 
 ## Create an agent
 
@@ -81,19 +81,27 @@ config/
 ├── deployment.yaml
 ├── persona.yaml
 ├── policies.yaml
+├── tools.yaml
 └── schemas/
+    ├── approval.schema.json
     ├── capability.schema.json
     ├── deployment.schema.json
     ├── post-tool-event.schema.json
-    └── pre-tool-event.schema.json
+    ├── policy.schema.json
+    ├── pre-tool-event.schema.json
+    └── tool-policy.schema.json
 harness/
+├── approvals.py
 ├── configuration.py
 ├── deployment.py
+├── guarded_runtime.py
+├── guardrails.py
 ├── policy.py
 ├── reference_adapter.py
 ├── registry.py
 ├── runtime.py
-└── runtime_factory.py
+├── runtime_factory.py
+└── tool_policy.py
 knowledge/
 └── decisions/
 scripts/
@@ -144,8 +152,37 @@ selected.
 
 The reference adapter is deliberately in-process and provider-neutral. It proves the boundary
 contract with registered handlers; it is not an OpenAI, Anthropic, or Google production SDK
-adapter. Phase 3 will bind approval resumes to exact calls and derive authorization from a
-trusted tool-policy registry.
+adapter. The guarded runtime binds approval resumes to exact calls and derives authorization
+from the trusted tool-policy registry described below.
+
+## Trusted guardrails
+
+`config/tools.yaml` is the only source of tool authority and is empty by default. A runtime
+handler that is not also present in that registry is blocked. Each entry declares its base
+action and risk, monotonic argument rules, filesystem paths, shell command fields, exact
+network hosts, private-data egress behavior, approval requirement, and output trust.
+
+The adapter canonicalizes declared paths and hosts before creating the trusted pre-tool event.
+Guardrails then:
+
+- reject caller-supplied classification, identity, or approval fields;
+- raise classifications based on trusted argument rules, never lower them;
+- resolve paths against configured roots and follow existing symlinks before containment
+  checks, then recheck canonical paths immediately before handler execution;
+- reject patterns and allowed-root targets for destructive operations;
+- block configured shell-deny patterns even when approval is supplied;
+- require exact allowlisted hostnames for outbound tools;
+- block sensitive-key egress unless the tool explicitly allows it with approval; and
+- label guarded outputs as `trusted` or `untrusted` in the post-tool event.
+
+Approval records are created from paused adapter-owned events and bind the run ID, call ID,
+tool ID, and canonical-argument digest. They live in the trusted store and are single-use.
+The host-only `GuardedRuntime.grant` method must never be exposed as a model-callable tool;
+model-provided approval objects, IDs, booleans, or classifications have no authority.
+
+The reference adapter executes trusted in-process handlers, so handler implementations remain
+part of the trusted computing base. They must use the canonical arguments and must not perform
+filesystem or network effects that their registry entry does not declare.
 
 ## Canonical configuration
 
@@ -154,8 +191,10 @@ trusted tool-policy registry.
 - `config/policies.yaml` is the only authorization-policy source.
 - `config/capabilities.yaml` is the only activation source.
 - `config/deployment.yaml` records host, documentation, and runtime selections.
+- `config/tools.yaml` is the only trusted tool-policy source and grants nothing when empty.
 - `config/schemas/capability.schema.json` is enforced by repository validation.
 - `config/schemas/deployment.schema.json` enforces compatible deployment combinations.
+- Runtime, policy, tool, and approval schemas are also enforced by repository validation.
 
 Every active or tested capability must have a real path and evaluation suite. New capabilities are scaffolded as `proposed` and cannot activate themselves.
 

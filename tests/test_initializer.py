@@ -65,6 +65,10 @@ class InitializerTests(unittest.TestCase):
             self.assertEqual(deployment["host"], "portable")
             self.assertEqual(deployment["documentation"]["provider"], "none")
             self.assertEqual(deployment["runtime"]["adapter"], "none")
+            tools = yaml.safe_load(
+                (destination / "config" / "tools.yaml").read_text(encoding="utf-8")
+            )
+            self.assertEqual(tools, {"version": "1.0", "tools": []})
             for filename in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
                 self.assertFalse((destination / filename).exists())
             self.assertEqual(list(destination.glob("skills/*/agents")), [])

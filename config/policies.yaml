@@ -1,6 +1,8 @@
 version: "1.0"
 scope:
-  allowed_roots:
+  read_roots:
+    - "."
+  write_roots:
     - "."
   denied_roots: []
 authorization:

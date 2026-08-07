@@ -12,6 +12,7 @@ from typing import Any
 from harness.runtime import PostToolEvent, PreToolEvent, RunContext, SideEffect
 
 ToolHandler = Callable[[dict[str, Any]], Any]
+ArgumentNormalizer = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -52,11 +53,13 @@ class ReferenceRuntimeAdapter:
         *,
         id_factory: Callable[[], str] | None = None,
         clock: Callable[[], str] | None = None,
+        argument_normalizer: ArgumentNormalizer | None = None,
     ) -> None:
         self._actor = _required(actor, "actor")
         self._handlers = dict(handlers)
         self._id_factory = id_factory or (lambda: str(uuid.uuid4()))
         self._clock = clock or _utc_now
+        self._argument_normalizer = argument_normalizer
         self._runs: set[str] = set()
         self._calls: set[str] = set()
 
@@ -78,6 +81,13 @@ class ReferenceRuntimeAdapter:
         normalized_arguments = _json_copy(arguments)
         if not isinstance(normalized_arguments, dict):
             raise ValueError("Tool arguments must be a JSON object")
+        if self._argument_normalizer is not None:
+            normalized_arguments = self._argument_normalizer(
+                normalized_tool_id, normalized_arguments
+            )
+            normalized_arguments = _json_copy(normalized_arguments)
+            if not isinstance(normalized_arguments, dict):
+                raise ValueError("Normalized tool arguments must be a JSON object")
         tool_call_id = _required(self._id_factory(), "generated tool call ID")
         if tool_call_id in self._calls:
             raise ValueError(f"Generated duplicate tool call ID: {tool_call_id}")
@@ -97,7 +107,17 @@ class ReferenceRuntimeAdapter:
         started_at = self._clock()
         handler = self._handlers[event.tool_id]
         try:
-            value = handler(_json_copy(event.arguments))
+            execution_arguments = _json_copy(event.arguments)
+            if self._argument_normalizer is not None:
+                current_arguments = self._argument_normalizer(
+                    event.tool_id, execution_arguments
+                )
+                if current_arguments != event.arguments:
+                    raise ValueError(
+                        "Normalized tool arguments changed before execution"
+                    )
+                execution_arguments = current_arguments
+            value = handler(execution_arguments)
             result = value if isinstance(value, ToolOutput) else ToolOutput(output=value)
             status = "succeeded"
             output = _json_copy(result.output)
@@ -125,6 +145,7 @@ class ReferenceRuntimeAdapter:
             started_at=started_at,
             completed_at=self._clock(),
             status=status,
+            output_trust="unclassified",
             output=output,
             error=error,
             side_effects=side_effects,
@@ -133,7 +154,7 @@ class ReferenceRuntimeAdapter:
 
 def _json_copy(value: Any) -> Any:
     try:
-        return json.loads(json.dumps(value))
+        return json.loads(json.dumps(value, allow_nan=False))
     except (TypeError, ValueError) as exc:
         raise ValueError("Runtime values must be JSON serializable") from exc
 
