@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence Gathering"
+  short_description: "Research claims with traceable evidence."
+  default_prompt: "Use $evidence-gathering to verify the important claims in this request."

@@ -1,0 +1,42 @@
+version: "1.0"
+capabilities:
+  - id: task-planning
+    type: skill
+    version: "1.0.0"
+    status: active
+    path: skills/task-planning
+    description: Plan bounded work with explicit scope, risk, validation, and rollback.
+    risk_level: low
+    owner: human
+    requires: []
+    evaluation_suite: tests/test_skills.py
+  - id: evidence-gathering
+    type: skill
+    version: "1.0.0"
+    status: active
+    path: skills/evidence-gathering
+    description: Verify material claims using direct observation and primary evidence.
+    risk_level: low
+    owner: human
+    requires: []
+    evaluation_suite: tests/test_skills.py
+  - id: safe-tool-use
+    type: skill
+    version: "1.0.0"
+    status: active
+    path: skills/safe-tool-use
+    description: Apply tools within scope, least privilege, and approval boundaries.
+    risk_level: medium
+    owner: human
+    requires: []
+    evaluation_suite: tests/test_skills.py
+  - id: documentation-maintenance
+    type: skill
+    version: "1.0.0"
+    status: active
+    path: skills/documentation-maintenance
+    description: Maintain durable decisions and operational documentation without duplication.
+    risk_level: low
+    owner: human
+    requires: []
+    evaluation_suite: tests/test_skills.py

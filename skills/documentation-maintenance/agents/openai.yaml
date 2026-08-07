@@ -1,0 +1,4 @@
+interface:
+  display_name: "Documentation Maintenance"
+  short_description: "Keep durable operational docs accurate."
+  default_prompt: "Use $documentation-maintenance to update the relevant durable documentation."

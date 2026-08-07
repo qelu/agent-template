@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Planning"
+  short_description: "Plan bounded work with risks and validation."
+  default_prompt: "Use $task-planning to turn this request into an executable, proportionate plan."

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/capability.schema.json",
+  "title": "Agent capability registry",
+  "type": "object",
+  "required": ["version", "capabilities"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/capability"}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "version",
+        "status",
+        "path",
+        "description",
+        "risk_level",
+        "owner",
+        "requires",
+        "evaluation_suite"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "type": {
+          "enum": ["skill", "workflow", "hook", "validator", "mcp-server"]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "status": {
+          "enum": ["proposed", "tested", "active", "deprecated", "disabled"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10
+        },
+        "risk_level": {
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "uniqueItems": true
+        },
+        "evaluation_suite": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+            },
+            {"type": "null"}
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

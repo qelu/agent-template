@@ -1,0 +1,16 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+runtime/cache/*
+!runtime/cache/.gitkeep
+runtime/logs/*
+!runtime/logs/.gitkeep
+runtime/state/*
+!runtime/state/.gitkeep
+*.local.yaml
+*.local.json

@@ -1,0 +1,7 @@
+id: example-workflow
+version: "1.0"
+description: "Describe the deterministic outcome."
+inputs: {}
+steps: []
+outputs: []
+failure_behavior: "Stop safely and report partial state."

@@ -1,0 +1,9 @@
+servers:
+  example_read_only:
+    enabled: false
+    command: ["python3", "server.py"]
+    environment:
+      MCP_EXAMPLE_TOKEN: "${MCP_EXAMPLE_TOKEN}"
+    permissions:
+      read: ["example-resource"]
+      write: []

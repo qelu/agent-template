@@ -1,0 +1,4 @@
+interface:
+  display_name: "Safe Tool Use"
+  short_description: "Apply tools within scope and authority."
+  default_prompt: "Use $safe-tool-use to execute this tool-based task safely and verify the result."
