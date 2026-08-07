@@ -37,6 +37,9 @@ class InitializerTests(unittest.TestCase):
             persona = (destination / "config" / "persona.yaml").read_text(encoding="utf-8")
             self.assertIn('name: "Sample"', persona)
             self.assertNotIn("__AGENT_NAME__", persona)
+            project = (destination / "pyproject.toml").read_text(encoding="utf-8")
+            self.assertIn('name = "sample"', project)
+            self.assertNotIn("agent-template-placeholder", project)
 
             expected = {
                 "agent",
@@ -53,6 +56,7 @@ class InitializerTests(unittest.TestCase):
             for excluded in ("examples", "hooks", "mcps", "runtime", "workflows"):
                 self.assertFalse((destination / excluded).exists())
             self.assertFalse((destination / "config" / "registry").exists())
+            self.assertFalse((destination / "tests" / "test_initializer.py").exists())
 
             extension = subprocess.run(
                 [

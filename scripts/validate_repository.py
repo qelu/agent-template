@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Validate the minimal template, configuration, capabilities, and skills."""
 
+import os
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -12,6 +14,15 @@ from harness.configuration import ConfigurationError, load_yaml  # noqa: E402
 from harness.registry import CapabilityError, load_capabilities  # noqa: E402
 
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
+TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".toml", ".py"}
+IGNORED_DIRECTORIES = {
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".ruff_cache",
+    ".pytest_cache",
+    ".mypy_cache",
+}
 REQUIRED = (
     "agent/AGENT.md",
     "agent/config.yaml",
@@ -23,6 +34,16 @@ REQUIRED = (
     "scripts/initialize_agent.py",
     "scripts/create_extension.py",
 )
+
+
+def repository_text_files(root: Path) -> Iterator[Path]:
+    for current, directories, filenames in os.walk(root):
+        directories[:] = [name for name in directories if name not in IGNORED_DIRECTORIES]
+        current_path = Path(current)
+        for filename in filenames:
+            path = current_path / filename
+            if path.suffix in TEXT_SUFFIXES:
+                yield path
 
 
 def load_yaml_fragment(text: str) -> dict[str, object]:
@@ -89,14 +110,13 @@ def main() -> int:
         errors.extend(validate_skill(skill_path))
 
     if not (ROOT / ".agent-template").exists():
-        for path in ROOT.rglob("*"):
-            if path.is_file() and path.suffix in {".md", ".yaml", ".yml", ".json", ".toml", ".py"}:
-                try:
-                    content = path.read_text(encoding="utf-8")
-                except UnicodeDecodeError:
-                    continue
-                if PLACEHOLDER.search(content):
-                    errors.append(f"Unresolved placeholder in {path.relative_to(ROOT)}")
+        for path in repository_text_files(ROOT):
+            try:
+                content = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if PLACEHOLDER.search(content):
+                errors.append(f"Unresolved placeholder in {path.relative_to(ROOT)}")
 
     if errors:
         for error in errors:

@@ -11,6 +11,7 @@ from pathlib import Path
 
 TEXT_SUFFIXES = {"", ".md", ".yaml", ".yml", ".json", ".toml", ".py", ".txt", ".example"}
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
+PROJECT_NAME_PLACEHOLDER = "agent-template-placeholder"
 ROOT_FILES = (".env.example", ".gitignore", "README.md", "pyproject.toml")
 ROOT_DIRECTORIES = ("agent", "config", "harness", "scripts", "skills", "templates", "tests")
 
@@ -38,19 +39,22 @@ def copy_minimal_template(source: Path, destination: Path) -> None:
     for filename in ROOT_FILES:
         shutil.copy2(source / filename, destination / filename)
     for dirname in ROOT_DIRECTORIES:
+        ignored_names = [
+            ".git",
+            ".venv",
+            "__pycache__",
+            ".ruff_cache",
+            ".pytest_cache",
+            ".mypy_cache",
+            ".coverage",
+            "*.pyc",
+        ]
+        if dirname == "tests":
+            ignored_names.append("test_initializer.py")
         shutil.copytree(
             source / dirname,
             destination / dirname,
-            ignore=shutil.ignore_patterns(
-                ".git",
-                ".venv",
-                "__pycache__",
-                ".ruff_cache",
-                ".pytest_cache",
-                ".mypy_cache",
-                ".coverage",
-                "*.pyc",
-            ),
+            ignore=shutil.ignore_patterns(*ignored_names),
         )
     decisions = destination / "knowledge" / "decisions"
     decisions.mkdir(parents=True)
@@ -114,6 +118,7 @@ def main() -> None:
     replace_placeholders(
         destination,
         {
+            PROJECT_NAME_PLACEHOLDER: agent_id,
             "__AGENT_NAME__": name,
             "__AGENT_ID__": agent_id,
             "__AGENT_GOAL__": goal,
