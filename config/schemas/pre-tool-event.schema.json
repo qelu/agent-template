@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/pre-tool-event.schema.json",
+  "title": "Trusted pre-tool event",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_type",
+    "run_id",
+    "tool_call_id",
+    "tool_id",
+    "arguments",
+    "requested_at",
+    "actor"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "event_type": {"const": "pre_tool"},
+    "run_id": {"type": "string", "minLength": 1},
+    "tool_call_id": {"type": "string", "minLength": 1},
+    "tool_id": {"type": "string", "minLength": 1},
+    "arguments": {"type": "object"},
+    "requested_at": {"type": "string", "format": "date-time"},
+    "actor": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

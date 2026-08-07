@@ -11,7 +11,13 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from harness.configuration import ConfigurationError, load_yaml  # noqa: E402
+from harness.deployment import (  # noqa: E402
+    DeploymentError,
+    load_deployment,
+    validate_runtime_activation,
+)
 from harness.registry import CapabilityError, load_capabilities  # noqa: E402
+from harness.runtime import RuntimeBoundaryError, validate_runtime_schemas  # noqa: E402
 
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
 TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".toml", ".py"}
@@ -28,9 +34,16 @@ REQUIRED = (
     "agent/config.yaml",
     "config/capabilities.yaml",
     "config/context-routes.yaml",
+    "config/deployment.yaml",
     "config/persona.yaml",
     "config/policies.yaml",
     "config/schemas/capability.schema.json",
+    "config/schemas/deployment.schema.json",
+    "config/schemas/post-tool-event.schema.json",
+    "config/schemas/pre-tool-event.schema.json",
+    "harness/reference_adapter.py",
+    "harness/runtime.py",
+    "harness/runtime_factory.py",
     "scripts/initialize_agent.py",
     "scripts/create_extension.py",
 )
@@ -99,6 +112,17 @@ def main() -> int:
     except (CapabilityError, ConfigurationError, OSError, ValueError) as exc:
         errors.append(str(exc))
         capabilities = []
+
+    try:
+        deployment = load_deployment(ROOT)
+        validate_runtime_activation(deployment, capabilities)
+    except (DeploymentError, ConfigurationError, OSError, ValueError) as exc:
+        errors.append(str(exc))
+
+    try:
+        validate_runtime_schemas(ROOT)
+    except (RuntimeBoundaryError, OSError, ValueError) as exc:
+        errors.append(str(exc))
 
     registered_skill_paths = {
         ROOT / item["path"] for item in capabilities if item.get("type") == "skill"

@@ -1,0 +1,7 @@
+version: "1.0"
+host: portable
+documentation:
+  provider: none
+  mode: none
+runtime:
+  adapter: none

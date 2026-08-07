@@ -18,8 +18,48 @@ python3 scripts/initialize_agent.py \
   --goal "Research technical questions and produce cited, reproducible answers." \
   --role "research and analysis partner" \
   --tone "clear, skeptical, and concise" \
-  --language en-US
+  --language en-US \
+  --host codex
 ```
+
+The deployment profile separates three axes:
+
+- `--host`: `portable`, `codex`, `claude-code`, or `gemini-cli`.
+- `--docs-provider`: `none`, `openai`, `anthropic`, or `gemini`.
+- `--runtime`: `none` or the executable, provider-neutral `reference` adapter.
+
+When `--docs-provider` is omitted, each concrete host selects its matching documentation
+provider. The portable default selects none. Documentation and host can also be mixed, such
+as Gemini documentation in Claude Code:
+
+```bash
+python3 scripts/initialize_agent.py \
+  --destination ../cross-provider-agent \
+  --name "Atlas" \
+  --goal "Build integrations from current primary documentation." \
+  --role "implementation partner" \
+  --tone "precise" \
+  --host claude-code \
+  --docs-provider gemini
+```
+
+The initializer writes only project-scoped configuration. It never modifies global Codex,
+Claude Code, or Gemini CLI settings.
+
+| Documentation provider | Generated capability | Official source |
+| --- | --- | --- |
+| OpenAI | HTTP MCP server | `https://developers.openai.com/mcp` |
+| Gemini | HTTP MCP server | `https://gemini-api-docs-mcp.dev` |
+| Anthropic | Documentation-fetch skill | Anthropic's official `llms.txt` indexes |
+| None | No documentation integration | — |
+
+Anthropic does not currently publish a verified first-party documentation MCP endpoint, so
+that profile uses a small skill which discovers pages through the official Anthropic API and
+Claude Code documentation indexes. Generated MCP files still require the host's normal trust
+or approval flow before use.
+
+Provider SDK adapters (`openai-agents`, `claude-agent-sdk`, and `google-adk`) are named future
+targets but are rejected until they implement the same runtime contract.
 
 Validate the generated agent:
 
@@ -38,13 +78,22 @@ agent/
 config/
 ├── capabilities.yaml
 ├── context-routes.yaml
+├── deployment.yaml
 ├── persona.yaml
 ├── policies.yaml
-└── schemas/capability.schema.json
+└── schemas/
+    ├── capability.schema.json
+    ├── deployment.schema.json
+    ├── post-tool-event.schema.json
+    └── pre-tool-event.schema.json
 harness/
 ├── configuration.py
+├── deployment.py
 ├── policy.py
-└── registry.py
+├── reference_adapter.py
+├── registry.py
+├── runtime.py
+└── runtime_factory.py
 knowledge/
 └── decisions/
 scripts/
@@ -64,13 +113,49 @@ templates/
 tests/
 ```
 
+Concrete host profiles additionally create exactly one thin instruction entrypoint
+(`AGENTS.md`, `CLAUDE.md`, or `GEMINI.md`) and, when required, that host's project-level MCP
+file. `agent/AGENT.md` remains canonical.
+
+## Runtime boundary
+
+Select the reference adapter when developing or testing executable runtime behavior:
+
+```bash
+python3 scripts/initialize_agent.py \
+  --destination ../runtime-agent \
+  --name "Boundary" \
+  --goal "Execute registered tools through a normalized boundary." \
+  --role "runtime test agent" \
+  --tone "concise" \
+  --runtime reference
+```
+
+`harness/runtime.py` defines the adapter protocol and control boundary. The adapter—not model
+output—creates the run ID, tool-call ID, actor, timestamps, tool identity, and normalized
+argument snapshot. `harness/runtime_factory.py` reads the deployment profile and constructs
+that selected boundary. A call may be allowed, permanently blocked, or paused and resumed
+using the same integrity-checked event snapshot. Calls execute at most once.
+
+Every execution produces a schema-validated post-tool event with `succeeded`, `failed`, or
+`partial` status. Partial results must identify each completed side effect, its exact target,
+and whether it is reversible. An active runtime hook is invalid unless a runtime adapter is
+selected.
+
+The reference adapter is deliberately in-process and provider-neutral. It proves the boundary
+contract with registered handlers; it is not an OpenAI, Anthropic, or Google production SDK
+adapter. Phase 3 will bind approval resumes to exact calls and derive authorization from a
+trusted tool-policy registry.
+
 ## Canonical configuration
 
 - `agent/AGENT.md` is the always-loaded behavioral contract.
 - `config/persona.yaml` is the only persona source.
 - `config/policies.yaml` is the only authorization-policy source.
 - `config/capabilities.yaml` is the only activation source.
+- `config/deployment.yaml` records host, documentation, and runtime selections.
 - `config/schemas/capability.schema.json` is enforced by repository validation.
+- `config/schemas/deployment.schema.json` enforces compatible deployment combinations.
 
 Every active or tested capability must have a real path and evaluation suite. New capabilities are scaffolded as `proposed` and cannot activate themselves.
 

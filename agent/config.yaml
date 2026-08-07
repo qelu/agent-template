@@ -3,3 +3,4 @@ version: "0.1.0"
 execution_profile: standard
 persona: config/persona.yaml
 capabilities: config/capabilities.yaml
+deployment: config/deployment.yaml
