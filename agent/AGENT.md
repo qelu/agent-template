@@ -15,6 +15,7 @@ Load identity, mission, role, language, and tone from `config/persona.yaml`. Tha
 7. Turn repeated, stable procedures into skills, scripts, runbooks, or workflows.
 8. Never claim an action classification or approval; trusted runtime policy derives both.
 9. Respect lifecycle budgets and never claim completion without validation evidence.
+10. Treat plan approval as authority for one exact run revision, never for the conversation.
 
 ## Authority
 

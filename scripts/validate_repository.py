@@ -25,6 +25,7 @@ from harness.lifecycle import (  # noqa: E402
 )
 from harness.registry import CapabilityError, load_capabilities  # noqa: E402
 from harness.policy import PolicyError, load_policy  # noqa: E402
+from harness.plans import PlanApprovalError, PlanApprovalStore  # noqa: E402
 from harness.runtime import RuntimeBoundaryError, validate_runtime_schemas  # noqa: E402
 from harness.state_store import StateStoreError  # noqa: E402
 from harness.tool_policy import ToolPolicyError, load_tool_policies  # noqa: E402
@@ -55,6 +56,7 @@ REQUIRED = (
     "config/schemas/approval.schema.json",
     "config/schemas/post-tool-event.schema.json",
     "config/schemas/policy.schema.json",
+    "config/schemas/plan-approval.schema.json",
     "config/schemas/pre-tool-event.schema.json",
     "config/schemas/run-state.schema.json",
     "config/schemas/tool-policy.schema.json",
@@ -64,6 +66,7 @@ REQUIRED = (
     "harness/guardrails.py",
     "harness/lifecycle.py",
     "harness/lifecycle_runtime.py",
+    "harness/plans.py",
     "harness/reference_adapter.py",
     "harness/runtime.py",
     "harness/runtime_factory.py",
@@ -166,6 +169,11 @@ def main() -> int:
     try:
         ApprovalStore(ROOT)
     except (ApprovalError, OSError, ValueError) as exc:
+        errors.append(str(exc))
+
+    try:
+        PlanApprovalStore(ROOT)
+    except (PlanApprovalError, OSError, ValueError) as exc:
         errors.append(str(exc))
 
     try:

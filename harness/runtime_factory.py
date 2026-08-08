@@ -10,6 +10,7 @@ from harness.guardrails import TrustedGuardrails
 from harness.lifecycle import LifecycleEngine, validate_lifecycle_runtime_compatibility
 from harness.lifecycle_runtime import LifecycleRuntime
 from harness.policy import load_policy
+from harness.plans import PlanApprovalStore
 from harness.reference_adapter import ReferenceRuntimeAdapter, ToolHandler
 from harness.runtime import RuntimeBoundary
 from harness.tool_policy import load_tool_policies
@@ -26,6 +27,7 @@ def configured_runtime(
     lifecycle = LifecycleEngine(root)
     validate_lifecycle_runtime_compatibility(lifecycle.config, adapter_name)
     approvals = ApprovalStore(root, storage_directory=lifecycle.store.directory)
+    plan_approvals = PlanApprovalStore(root, storage_directory=lifecycle.store.directory)
     guardrails = TrustedGuardrails(
         root=root,
         tool_policies=load_tool_policies(root),
@@ -44,4 +46,4 @@ def configured_runtime(
     else:
         raise DeploymentError(f"Runtime adapter is not implemented: {adapter_name}")
     guarded = GuardedRuntime(boundary, guardrails, approvals)
-    return LifecycleRuntime(guarded, lifecycle)
+    return LifecycleRuntime(guarded, lifecycle, plan_approvals)

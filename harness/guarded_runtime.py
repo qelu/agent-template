@@ -46,6 +46,9 @@ class GuardedRuntime:
     def restore_run(self, run: RunContext) -> None:
         self._boundary.restore_run(run)
 
+    def normalize_arguments(self, tool_id: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        return self._guardrails.normalize_arguments(tool_id, arguments)
+
     def prepare_tool_call(
         self, run: RunContext, tool_id: str, arguments: dict[str, Any]
     ) -> ToolCallControl:

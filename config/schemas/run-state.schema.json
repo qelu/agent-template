@@ -14,6 +14,8 @@
     "deadline_at",
     "limits",
     "usage",
+    "plans",
+    "active_plan_revision",
     "validation_round",
     "pending_call",
     "attempts",
@@ -55,6 +57,50 @@
       },
       "additionalProperties": false
     },
+    "plans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "revision",
+          "digest",
+          "summary",
+          "status",
+          "approval_id",
+          "created_at",
+          "approved_at",
+          "actions"
+        ],
+        "properties": {
+          "revision": {"type": "integer", "minimum": 1},
+          "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "summary": {"type": "string", "minLength": 1},
+          "status": {"enum": ["draft", "approved", "superseded"]},
+          "approval_id": {"type": ["string", "null"]},
+          "created_at": {"type": "string", "format": "date-time"},
+          "approved_at": {"type": ["string", "null"], "format": "date-time"},
+          "actions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["tool_id", "arguments_digest", "used"],
+              "properties": {
+                "tool_id": {"type": "string", "minLength": 1},
+                "arguments_digest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "used": {"type": "boolean"}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "active_plan_revision": {"type": ["integer", "null"], "minimum": 1},
     "validation_round": {"type": "integer", "minimum": 0},
     "pending_call": {
       "anyOf": [

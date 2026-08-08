@@ -14,6 +14,7 @@ from jsonschema.exceptions import SchemaError
 
 from harness.configuration import load_yaml
 from harness.policy import load_policy
+from harness.plans import PlanApprovalRecord, arguments_digest, plan_digest
 from harness.runtime import PostToolEvent, PreToolEvent, RunContext
 from harness.state_store import RunStateStore, StateStoreError
 
@@ -114,6 +115,8 @@ class LifecycleEngine:
             "deadline_at": deadline,
             "limits": _copy(self.config["limits"]),
             "usage": {"model_turns": 0, "tool_calls": 0, "retries": 0},
+            "plans": [],
+            "active_plan_revision": None,
             "validation_round": 0,
             "pending_call": None,
             "attempts": [],
@@ -157,8 +160,88 @@ class LifecycleEngine:
         state["usage"]["model_turns"] += 1
         return self._save(state)
 
+    def define_plan(
+        self, run_id: str, summary: str, actions: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Create a new draft revision and invalidate the previous approved plan."""
+        state = self._active(run_id)
+        if state["status"] not in {"inspecting", "ready"}:
+            raise LifecycleError("Plans can only be defined while inspecting or ready")
+        normalized_summary = _required(summary, "plan summary")
+        normalized_actions: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for action in actions:
+            tool_id = _required(str(action.get("tool_id", "")), "planned tool ID")
+            digest = str(action.get("arguments_digest", "")).lower()
+            if len(digest) != 64 or any(
+                character not in "0123456789abcdef" for character in digest
+            ):
+                raise LifecycleError("Planned arguments digest must be SHA-256 hexadecimal")
+            key = (tool_id, digest)
+            if key in seen:
+                raise LifecycleError("Duplicate planned tool and argument digest")
+            seen.add(key)
+            normalized_actions.append(
+                {
+                    "tool_id": tool_id,
+                    "arguments_digest": digest,
+                    "used": False,
+                }
+            )
+        if not normalized_actions:
+            raise LifecycleError("Implementation plans require at least one exact action")
+        for existing in state["plans"]:
+            if existing["status"] in {"draft", "approved"}:
+                existing["status"] = "superseded"
+        revision = len(state["plans"]) + 1
+        now = self._now()
+        digest = plan_digest(run_id, revision, normalized_summary, normalized_actions)
+        state["plans"].append(
+            {
+                "revision": revision,
+                "digest": digest,
+                "summary": normalized_summary,
+                "status": "draft",
+                "approval_id": None,
+                "created_at": now,
+                "approved_at": None,
+                "actions": normalized_actions,
+            }
+        )
+        state["active_plan_revision"] = revision
+        return self._save(state)
+
+    def current_plan(self, run_id: str) -> dict[str, Any]:
+        state = self.get(run_id)
+        revision = state["active_plan_revision"]
+        if revision is None:
+            raise LifecycleError("Run has no implementation plan")
+        return _copy(state["plans"][revision - 1])
+
+    def approve_plan(self, run_id: str, approval: PlanApprovalRecord) -> dict[str, Any]:
+        state = self._active(run_id)
+        revision = state["active_plan_revision"]
+        if revision is None:
+            raise LifecycleError("Run has no implementation plan to approve")
+        plan = state["plans"][revision - 1]
+        if plan["status"] != "draft":
+            raise LifecycleError("Only the current draft plan can be approved")
+        expected = (run_id, revision, plan["digest"])
+        actual = (approval.run_id, approval.plan_revision, approval.plan_digest)
+        if actual != expected or approval.consumed_at is None:
+            raise LifecycleError("Approval does not match the exact current plan")
+        plan["status"] = "approved"
+        plan["approval_id"] = approval.approval_id
+        plan["approved_at"] = approval.consumed_at
+        return self._save(state)
+
     def begin_tool_call(
-        self, event: PreToolEvent, *, awaiting_approval: bool, retry: bool = False
+        self,
+        event: PreToolEvent,
+        *,
+        awaiting_approval: bool,
+        retry: bool = False,
+        requires_plan: bool = False,
     ) -> dict[str, Any]:
         sensitive = _find_sensitive_keys(event.arguments, self._sensitive_keys)
         if sensitive:
@@ -171,6 +254,8 @@ class LifecycleEngine:
             raise LifecycleError(f"Tool calls require ready state, found: {state['status']}")
         if state["usage"]["tool_calls"] >= state["limits"]["max_tool_calls"]:
             return self._terminal(state, "blocked", "Tool-call limit exhausted")
+        if requires_plan:
+            self._consume_planned_action(state, event)
         key = idempotency_key(event)
         matches = [attempt for attempt in state["attempts"] if attempt["idempotency_key"] == key]
         if any(
@@ -384,6 +469,27 @@ class LifecycleEngine:
             }
         )
 
+    @staticmethod
+    def _consume_planned_action(state: dict[str, Any], event: PreToolEvent) -> None:
+        revision = state["active_plan_revision"]
+        if revision is None:
+            raise LifecycleError("State-changing execution requires an approved plan")
+        plan = state["plans"][revision - 1]
+        if plan["status"] != "approved":
+            raise LifecycleError("State-changing execution requires an approved plan")
+        digest = arguments_digest(event.arguments)
+        matches = [
+            action
+            for action in plan["actions"]
+            if action["tool_id"] == event.tool_id and action["arguments_digest"] == digest
+        ]
+        if len(matches) != 1:
+            raise LifecycleError("Tool call is outside the exact approved plan")
+        action = matches[0]
+        if action["used"]:
+            raise LifecycleError("Exact approved plan action has already been used")
+        action["used"] = True
+
     def _save(self, state: dict[str, Any]) -> dict[str, Any]:
         state["updated_at"] = self._now()
         try:
@@ -440,6 +546,32 @@ class LifecycleEngine:
             raise LifecycleError("Persistent tool-call usage exceeds its trusted limit")
         if usage["retries"] > limits["max_retries"]:
             raise LifecycleError("Persistent retry usage exceeds its trusted limit")
+        plans = state["plans"]
+        if not plans and state["active_plan_revision"] is not None:
+            raise LifecycleError("Active plan revision exists without plan history")
+        if plans:
+            if state["active_plan_revision"] != len(plans):
+                raise LifecycleError("Active plan revision must identify the latest plan")
+            for index, plan in enumerate(plans, start=1):
+                if plan["revision"] != index:
+                    raise LifecycleError("Plan revisions must be contiguous")
+                expected_digest = plan_digest(
+                    state["run_id"], index, plan["summary"], plan["actions"]
+                )
+                if plan["digest"] != expected_digest:
+                    raise LifecycleError("Persistent plan digest does not match its manifest")
+                if plan["status"] == "draft" and (
+                    plan["approval_id"] is not None or plan["approved_at"] is not None
+                ):
+                    raise LifecycleError("Draft plan contains approval metadata")
+                if plan["status"] == "approved" and (
+                    plan["approval_id"] is None or plan["approved_at"] is None
+                ):
+                    raise LifecycleError("Approved plan lacks approval metadata")
+            if plans[-1]["status"] not in {"draft", "approved"}:
+                raise LifecycleError("Latest plan revision cannot be superseded")
+            if any(plan["status"] != "superseded" for plan in plans[:-1]):
+                raise LifecycleError("Only the latest plan revision can remain current")
         for evidence in state["validation_evidence"]:
             if evidence["validation_round"] > state["validation_round"]:
                 raise LifecycleError("Validation evidence refers to a future round")

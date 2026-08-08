@@ -8,6 +8,7 @@ from harness.approvals import ApprovalRecord
 from harness.guarded_runtime import GuardedRuntime
 from harness.guardrails import GuardrailOutcome
 from harness.lifecycle import LifecycleEngine, LifecycleError
+from harness.plans import PlanApprovalStore, arguments_digest
 from harness.runtime import (
     ControlState,
     PostToolEvent,
@@ -21,9 +22,15 @@ from harness.runtime import (
 class LifecycleRuntime:
     """Provider-neutral managed runtime with persistent bounded run state."""
 
-    def __init__(self, guarded: GuardedRuntime, lifecycle: LifecycleEngine) -> None:
+    def __init__(
+        self,
+        guarded: GuardedRuntime,
+        lifecycle: LifecycleEngine,
+        plan_approvals: PlanApprovalStore | None = None,
+    ) -> None:
         self._guarded = guarded
         self.lifecycle = lifecycle
+        self._plan_approvals = plan_approvals
 
     @property
     def hooks_enabled(self) -> bool:
@@ -67,6 +74,44 @@ class LifecycleRuntime:
     def ready(self, run: RunContext, reason: str = "Run is ready") -> dict[str, Any]:
         return self.lifecycle.ready(run.run_id, reason)
 
+    def define_plan(
+        self,
+        run: RunContext,
+        summary: str,
+        actions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Define exact normalized state-changing actions for one plan revision."""
+        normalized: list[dict[str, Any]] = []
+        for action in actions:
+            tool_id = str(action.get("tool_id", ""))
+            arguments = action.get("arguments")
+            if not isinstance(arguments, dict):
+                raise LifecycleError("Planned action arguments must be an object")
+            normalized_arguments = self._guarded.normalize_arguments(tool_id, arguments)
+            normalized.append(
+                {
+                    "tool_id": tool_id,
+                    "arguments_digest": arguments_digest(normalized_arguments),
+                }
+            )
+        return self.lifecycle.define_plan(run.run_id, summary, normalized)
+
+    def approve_plan(self, run: RunContext, granted_by: str) -> dict[str, Any]:
+        """Host-only: approve and consume one exact current plan revision."""
+        if self._plan_approvals is None:
+            raise LifecycleError("Persistent plan approval authority is not configured")
+        plan = self.lifecycle.current_plan(run.run_id)
+        granted = self._plan_approvals.grant(
+            run.run_id, plan["revision"], plan["digest"], granted_by
+        )
+        consumed = self._plan_approvals.consume(
+            run.run_id,
+            plan["revision"],
+            plan["digest"],
+            granted.approval_id,
+        )
+        return self.lifecycle.approve_plan(run.run_id, consumed)
+
     def prepare_tool_call(
         self,
         run: RunContext,
@@ -93,6 +138,7 @@ class LifecycleRuntime:
                 control.event,
                 awaiting_approval=decision.outcome == GuardrailOutcome.PAUSE,
                 retry=retry,
+                requires_plan=decision.action_class != "read_only",
             )
         except LifecycleError as exc:
             blocked = self._guarded.abandon(control, str(exc))

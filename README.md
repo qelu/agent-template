@@ -90,6 +90,7 @@ config/
     ├── lifecycle.schema.json
     ├── post-tool-event.schema.json
     ├── policy.schema.json
+    ├── plan-approval.schema.json
     ├── pre-tool-event.schema.json
     ├── run-state.schema.json
     └── tool-policy.schema.json
@@ -102,6 +103,7 @@ harness/
 ├── lifecycle.py
 ├── lifecycle_runtime.py
 ├── policy.py
+├── plans.py
 ├── reference_adapter.py
 ├── registry.py
 ├── runtime.py
@@ -228,6 +230,20 @@ The host orchestration layer must call `record_model_turn` for every model turn 
 managed runtime for every tool call. Bypassing that API is outside the trusted runtime
 contract and cannot claim lifecycle enforcement.
 
+### Bounded implementation plans
+
+Read-only inspection can proceed without a plan. Before any state-changing tool call, the
+managed runtime requires an approved plan revision containing that exact normalized tool and
+argument digest. Each planned action is usable once. Revising the summary or action manifest
+creates a new digest, supersedes the previous revision, and removes its authority.
+
+Plan approval is bound to the run ID, revision, and plan digest and is consumed once when the
+revision becomes approved. It does not approve the conversation, future runs, revised plans,
+or tool calls outside the manifest. Terminal runs never reopen, so a later request must start
+a new run and obtain its own plan approval. The host-only `approve_plan` method must not be
+exposed as a model-callable tool. Destructive and external calls still require their separate
+exact Phase 3 tool approval even when they appear in an approved plan.
+
 ## Canonical configuration
 
 - `agent/AGENT.md` is the always-loaded behavioral contract.
@@ -239,7 +255,7 @@ contract and cannot claim lifecycle enforcement.
 - `config/tools.yaml` is the only trusted tool-policy source and grants nothing when empty.
 - `config/schemas/capability.schema.json` is enforced by repository validation.
 - `config/schemas/deployment.schema.json` enforces compatible deployment combinations.
-- Runtime, lifecycle, policy, tool, state, and approval schemas are also enforced by repository validation.
+- Runtime, lifecycle, policy, tool, state, plan, and approval schemas are also enforced by repository validation.
 
 Every active or tested capability must have a real path and evaluation suite. New capabilities are scaffolded as `proposed` and cannot activate themselves.
 

@@ -17,6 +17,7 @@ from harness.lifecycle import (
     validate_lifecycle_runtime_compatibility,
 )
 from harness.lifecycle_runtime import LifecycleRuntime
+from harness.plans import PlanApprovalStore
 from harness.reference_adapter import ReferenceRuntimeAdapter
 from harness.runtime import PostToolEvent, PreToolEvent, RunContext, RuntimeBoundary, SideEffect
 from harness.state_store import StateStoreError
@@ -53,11 +54,11 @@ def policy() -> dict[str, object]:
     }
 
 
-def tool(*, approval: str = "inherit") -> dict[str, object]:
+def tool(*, approval: str = "inherit", action_class: str = "read_only") -> dict[str, object]:
     return {
         "id": "test.tool",
-        "action_class": "read_only",
-        "risk_level": "low",
+        "action_class": action_class,
+        "risk_level": "low" if action_class == "read_only" else "medium",
         "approval": approval,
         "argument_rules": [],
         "filesystem": {
@@ -310,6 +311,59 @@ class LifecycleTests(unittest.TestCase):
         serialized = json.dumps(state)
         self.assertNotIn("raw-secret", serialized)
 
+    def test_state_change_requires_exact_approved_plan(self) -> None:
+        runtime = self._runtime(
+            approval="inherit",
+            adapter_ids=Sequence("run-1", "call-1"),
+            action_class="reversible_local_change",
+        )
+        run = runtime.start_run()
+        blocked = runtime.prepare_tool_call(run, "test.tool", {"value": 1})
+        self.assertEqual(blocked.state.value, "blocked")
+        self.assertIn("approved plan", blocked.reason)
+
+    def test_approved_plan_binds_exact_arguments_and_call_count(self) -> None:
+        runtime = self._runtime(
+            approval="inherit",
+            adapter_ids=Sequence("run-1", "call-1", "call-2"),
+            action_class="reversible_local_change",
+        )
+        run = runtime.start_run()
+        runtime.define_plan(
+            run,
+            "Write the exact requested value once",
+            [{"tool_id": "test.tool", "arguments": {"value": 1}}],
+        )
+        runtime.approve_plan(run, "human:reviewer")
+        control = runtime.prepare_tool_call(run, "test.tool", {"value": 1})
+        self.assertEqual(runtime.execute(control).status, "succeeded")
+        exhausted = runtime.prepare_tool_call(run, "test.tool", {"value": 1})
+        self.assertEqual(exhausted.state.value, "blocked")
+        self.assertIn("already been used", exhausted.reason)
+
+    def test_new_plan_revision_invalidates_previous_approval(self) -> None:
+        runtime = self._runtime(
+            approval="inherit",
+            adapter_ids=Sequence("run-1", "call-1"),
+            action_class="reversible_local_change",
+        )
+        run = runtime.start_run()
+        runtime.define_plan(
+            run,
+            "First scope",
+            [{"tool_id": "test.tool", "arguments": {"value": 1}}],
+        )
+        runtime.approve_plan(run, "human:reviewer")
+        revised = runtime.define_plan(
+            run,
+            "Expanded scope",
+            [{"tool_id": "test.tool", "arguments": {"value": 2}}],
+        )
+        self.assertEqual(revised["plans"][0]["status"], "superseded")
+        self.assertEqual(revised["plans"][1]["status"], "draft")
+        blocked = runtime.prepare_tool_call(run, "test.tool", {"value": 2})
+        self.assertEqual(blocked.state.value, "blocked")
+
     def _ready(self, run_id: str) -> None:
         self.lifecycle.create(RunContext(run_id, "trusted-host"))
         self.lifecycle.inspect(run_id)
@@ -355,7 +409,13 @@ class LifecycleTests(unittest.TestCase):
             side_effects=effects,
         )
 
-    def _runtime(self, *, approval: str, adapter_ids: Sequence) -> LifecycleRuntime:
+    def _runtime(
+        self,
+        *,
+        approval: str,
+        adapter_ids: Sequence,
+        action_class: str = "read_only",
+    ) -> LifecycleRuntime:
         state_directory = self.lifecycle.store.directory
         approvals = ApprovalStore(
             self.root,
@@ -363,7 +423,12 @@ class LifecycleTests(unittest.TestCase):
             clock=self.clock,
             id_factory=Sequence("approval-1"),
         )
-        policies = {"test.tool": tool(approval=approval)}
+        plan_approvals = PlanApprovalStore(
+            self.root,
+            storage_directory=state_directory,
+            clock=self.clock,
+        )
+        policies = {"test.tool": tool(approval=approval, action_class=action_class)}
         guardrails = TrustedGuardrails(
             self.root,
             policies,  # type: ignore[arg-type]
@@ -378,7 +443,11 @@ class LifecycleTests(unittest.TestCase):
             argument_normalizer=guardrails.normalize_arguments,
         )
         guarded = GuardedRuntime(RuntimeBoundary(adapter, self.root), guardrails, approvals)
-        return LifecycleRuntime(guarded, LifecycleEngine(self.root, clock=self.clock))
+        return LifecycleRuntime(
+            guarded,
+            LifecycleEngine(self.root, clock=self.clock),
+            plan_approvals,
+        )
 
     def _copy_contracts(self) -> None:
         schemas = self.root / "config" / "schemas"
@@ -388,6 +457,7 @@ class LifecycleTests(unittest.TestCase):
             "lifecycle.schema.json",
             "post-tool-event.schema.json",
             "policy.schema.json",
+            "plan-approval.schema.json",
             "pre-tool-event.schema.json",
             "run-state.schema.json",
         ):
