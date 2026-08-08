@@ -12,6 +12,16 @@ from pathlib import Path
 
 import yaml
 
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from harness.registry import (  # noqa: E402
+    artifact_digest,
+    attested_active_capability,
+    capability_definition_digest,
+    file_digest,
+)
+
 TEXT_SUFFIXES = {"", ".md", ".yaml", ".yml", ".json", ".toml", ".py", ".txt", ".example"}
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
 PROJECT_NAME_PLACEHOLDER = "agent-template-placeholder"
@@ -175,9 +185,7 @@ def write_anthropic_documentation_skill(destination: Path, host: str) -> Path:
     if host == "codex":
         agents_path = skill_path / "agents"
         agents_path.mkdir()
-        (agents_path / "openai.yaml").write_text(
-            ANTHROPIC_OPENAI_METADATA, encoding="utf-8"
-        )
+        (agents_path / "openai.yaml").write_text(ANTHROPIC_OPENAI_METADATA, encoding="utf-8")
     return skill_path
 
 
@@ -196,19 +204,49 @@ def register_documentation_capability(
         capability_type = "mcp-server"
         description = str(server["description"])
     registry["capabilities"].append(
-        {
-            "id": capability_id,
-            "type": capability_type,
-            "version": "1.0.0",
-            "status": "active",
-            "path": str(capability_path.relative_to(destination)),
-            "description": description,
-            "risk_level": "low",
-            "owner": "human",
-            "requires": [],
-            "evaluation_suite": "tests/test_deployment_profiles.py",
-        }
+        attested_active_capability(
+            destination,
+            capability_id=capability_id,
+            capability_type=capability_type,
+            version="1.0.0",
+            path=str(capability_path.relative_to(destination)),
+            description=description,
+            risk_level="low",
+            owner="human",
+            evaluation_suite="tests/test_deployment_profiles.py",
+            approved_by="human:initializer-user",
+            approval_id=f"initializer-{capability_id}",
+            hosts=[
+                yaml.safe_load((destination / "config" / "deployment.yaml").read_text())["host"]
+            ],
+            runtime_adapters=[
+                yaml.safe_load((destination / "config" / "deployment.yaml").read_text())["runtime"][
+                    "adapter"
+                ]
+            ],
+        )
     )
+    write_yaml(registry_path, registry)
+
+
+def refresh_initialized_artifacts(destination: Path) -> None:
+    """Bind controlled host-specific initialization output to the copied registry."""
+    registry_path = destination / "config" / "capabilities.yaml"
+    registry = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
+    for capability in registry["capabilities"]:
+        digest = artifact_digest(destination / capability["path"])
+        capability["artifact_digest"] = digest
+        capability["definition_digest"] = capability_definition_digest(capability)
+        for transition in capability["history"]:
+            transition["artifact_digest"] = digest
+        if capability["evaluation"] is not None:
+            capability["evaluation"]["artifact_digest"] = digest
+            suite_digest = file_digest(destination / capability["evaluation_suite"])
+            capability["evaluation"]["suite_digest"] = suite_digest
+        if capability["activation"] is not None:
+            capability["activation"]["artifact_digest"] = digest
+            capability["activation"]["definition_digest"] = capability["definition_digest"]
+            capability["activation"]["suite_digest"] = suite_digest
     write_yaml(registry_path, registry)
 
 
@@ -242,9 +280,7 @@ def configure_deployment(
     if documentation_provider == "anthropic":
         capability_path = write_anthropic_documentation_skill(destination, host)
     else:
-        capability_path = write_mcp_configuration(
-            destination, host, documentation_provider
-        )
+        capability_path = write_mcp_configuration(destination, host, documentation_provider)
     register_documentation_capability(destination, documentation_provider, capability_path)
 
 
@@ -298,9 +334,7 @@ def main() -> None:
     tone = prompt(args.tone, "Tone")
     destination = args.destination.expanduser().resolve()
     source = Path(__file__).resolve().parent.parent
-    documentation_provider = (
-        args.docs_provider or DEFAULT_DOCUMENTATION_PROVIDER[args.host]
-    )
+    documentation_provider = args.docs_provider or DEFAULT_DOCUMENTATION_PROVIDER[args.host]
 
     if args.runtime not in {"none", "reference"}:
         raise SystemExit(f"Runtime adapter is not implemented: {args.runtime}")
@@ -326,6 +360,7 @@ def main() -> None:
             "__AGENT_LANGUAGE__": args.language,
         },
     )
+    refresh_initialized_artifacts(destination)
 
     unresolved = unresolved_placeholders(destination)
     if unresolved:

@@ -95,6 +95,9 @@ class InitializerTests(unittest.TestCase):
                 env=environment,
             )
             self.assertEqual(extension.returncode, 0, extension.stderr)
+            evaluation = destination / "tests" / "test_capability_sample_analysis.py"
+            self.assertTrue(evaluation.is_file())
+            self.assertIn("self.fail", evaluation.read_text(encoding="utf-8"))
 
             validation = subprocess.run(
                 [sys.executable, str(destination / "scripts" / "validate_repository.py")],

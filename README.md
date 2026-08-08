@@ -115,6 +115,7 @@ knowledge/
 scripts/
 ├── create_extension.py
 ├── initialize_agent.py
+├── manage_capability.py
 └── validate_repository.py
 skills/
 ├── documentation-maintenance/
@@ -257,7 +258,17 @@ exact Phase 3 tool approval even when they appear in an approved plan.
 - `config/schemas/deployment.schema.json` enforces compatible deployment combinations.
 - Runtime, lifecycle, policy, tool, state, plan, and approval schemas are also enforced by repository validation.
 
-Every active or tested capability must have a real path and evaluation suite. New capabilities are scaffolded as `proposed` and cannot activate themselves.
+Every capability is bound to the digest of its artifact. Tested capabilities require passing
+evidence for the exact artifact and evaluation-suite digests. Active capabilities additionally
+require a human approval bound to the exact version and both digests. Dependencies declare a
+minimum version, cycles are rejected, and active capabilities must match the selected host and
+runtime adapter.
+
+The enforced lifecycle is `proposed → tested → active → deprecated → removal`. `disabled` is
+an emergency side state that remembers its source status and rechecks evidence, dependencies,
+and compatibility before restoring active authority. Behavior or contract changes require a
+higher semantic version and reset the capability to `proposed`; silent artifact drift fails
+repository validation.
 
 ## Create an extension
 
@@ -268,6 +279,21 @@ python3 scripts/create_extension.py --type runbook --id restore-service --name "
 ```
 
 Skills and workflows are registered as proposed capabilities. Runbooks are human-operable documents and are not capabilities.
+
+Promote a capability through the lifecycle with the host-operated manager:
+
+```bash
+python3 scripts/manage_capability.py bump summarize-evidence --version 0.2.0 --actor human:reviewer
+python3 scripts/manage_capability.py test summarize-evidence --actor human:reviewer
+```
+
+The scaffolder creates a deliberately failing evaluation placeholder. Implement the capability
+and its behavioral evaluation, then bump the version before testing. `test` runs the declared
+evaluation before recording evidence. Activation is available only through the host-owned
+`CapabilityLifecycle.activate` approval path and must never be exposed as a model-callable tool
+or shell command. Deprecation and removal fail
+while dependents remain; removal deletes only the registry entry and deliberately leaves the
+artifact for an explicit, separately reviewed filesystem change.
 
 ## Optional examples
 

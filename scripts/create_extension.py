@@ -6,11 +6,16 @@ from __future__ import annotations
 import argparse
 import re
 import shutil
+import sys
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from harness.registry import proposed_capability  # noqa: E402
+
 TEMPLATES = ROOT / "templates"
 
 CAPABILITY_TARGETS = {
@@ -67,19 +72,32 @@ def scaffold_capability(capability_type: str, extension_id: str, name: str) -> P
             "example-workflow": extension_id,
         },
     )
+    suite = ROOT / "tests" / f"test_capability_{extension_id.replace('-', '_')}.py"
+    if suite.exists():
+        raise SystemExit(f"Evaluation suite already exists: {suite}")
+    suite.write_text(
+        "import unittest\n\n\n"
+        f"class {''.join(part.title() for part in extension_id.split('-'))}CapabilityTests"
+        "(unittest.TestCase):\n"
+        "    def test_behavioral_contract(self) -> None:\n"
+        '        self.fail("Replace with a behavioral evaluation before promotion")\n\n\n'
+        'if __name__ == "__main__":\n'
+        "    unittest.main()\n",
+        encoding="utf-8",
+    )
     capabilities.append(
-        {
-            "id": extension_id,
-            "type": capability_type,
-            "version": "0.1.0",
-            "status": "proposed",
-            "path": str(destination.relative_to(ROOT)),
-            "description": f"Proposed capability for {name}.",
-            "risk_level": risk_level,
-            "owner": "human",
-            "requires": [],
-            "evaluation_suite": None,
-        }
+        proposed_capability(
+            ROOT,
+            capability_id=extension_id,
+            capability_type=capability_type,
+            version="0.1.0",
+            path=str(destination.relative_to(ROOT)),
+            description=f"Proposed capability for {name}.",
+            risk_level=risk_level,
+            owner="human",
+            actor="human:extension-scaffolder",
+            evaluation_suite=str(suite.relative_to(ROOT)),
+        )
     )
     registry_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     return destination

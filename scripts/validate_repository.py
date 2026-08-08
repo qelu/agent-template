@@ -74,6 +74,7 @@ REQUIRED = (
     "harness/tool_policy.py",
     "scripts/initialize_agent.py",
     "scripts/create_extension.py",
+    "scripts/manage_capability.py",
 )
 
 

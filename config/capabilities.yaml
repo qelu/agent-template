@@ -1,42 +1,116 @@
-version: "1.0"
+version: "2.0"
 capabilities:
   - id: task-planning
     type: skill
     version: "1.0.0"
     status: active
     path: skills/task-planning
+    artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230
+    definition_digest: ceb8817f4b4b7633927bd90985c58156862601f7bd53be53a3739cc029193554
     description: Plan bounded work with explicit scope, risk, validation, and rollback.
     risk_level: low
     owner: human
     requires: []
+    compatibility: &portable_compatibility
+      hosts: [portable, codex, claude-code, gemini-cli]
+      runtime_adapters: [none, reference, openai-agents, claude-agent-sdk, google-adk]
     evaluation_suite: tests/test_skills.py
+    evaluation: &skill_evaluation
+      suite_digest: 8bc21fc2828864153b3e3c75ed0bc204e17460da33b55c575f6763d1f23a8b87
+      artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230
+      passed_at: "2026-08-08T00:00:00Z"
+      recorded_by: human:phase-5-migration
+    activation: &task_planning_activation
+      approval_id: phase-5-migration-task-planning
+      approved_by: human:phase-5-migration
+      approved_at: "2026-08-08T00:00:00Z"
+      version: "1.0.0"
+      artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230
+      definition_digest: ceb8817f4b4b7633927bd90985c58156862601f7bd53be53a3739cc029193554
+      suite_digest: 8bc21fc2828864153b3e3c75ed0bc204e17460da33b55c575f6763d1f23a8b87
+    disabled_from: null
+    history:
+      - {from: null, to: proposed, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing capability imported", version: "1.0.0", artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230}
+      - {from: proposed, to: tested, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing evaluation recorded", version: "1.0.0", artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230}
+      - {from: tested, to: active, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing activation recorded", version: "1.0.0", artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230}
+
   - id: evidence-gathering
     type: skill
     version: "1.0.0"
     status: active
     path: skills/evidence-gathering
+    artifact_digest: 976417986b5899171d0413b7e62d7e6bd4e7e30c935812023ad88cb12dc52f0b
+    definition_digest: 18b0219adff8c961f955bd771a2be5aaee375902a6bf53205c06f675552f3631
     description: Verify material claims using direct observation and primary evidence.
     risk_level: low
     owner: human
     requires: []
+    compatibility: *portable_compatibility
     evaluation_suite: tests/test_skills.py
+    evaluation:
+      <<: *skill_evaluation
+      artifact_digest: 976417986b5899171d0413b7e62d7e6bd4e7e30c935812023ad88cb12dc52f0b
+    activation:
+      <<: *task_planning_activation
+      approval_id: phase-5-migration-evidence-gathering
+      artifact_digest: 976417986b5899171d0413b7e62d7e6bd4e7e30c935812023ad88cb12dc52f0b
+      definition_digest: 18b0219adff8c961f955bd771a2be5aaee375902a6bf53205c06f675552f3631
+    disabled_from: null
+    history:
+      - {from: null, to: proposed, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing capability imported", version: "1.0.0", artifact_digest: 976417986b5899171d0413b7e62d7e6bd4e7e30c935812023ad88cb12dc52f0b}
+      - {from: proposed, to: tested, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing evaluation recorded", version: "1.0.0", artifact_digest: 976417986b5899171d0413b7e62d7e6bd4e7e30c935812023ad88cb12dc52f0b}
+      - {from: tested, to: active, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing activation recorded", version: "1.0.0", artifact_digest: 976417986b5899171d0413b7e62d7e6bd4e7e30c935812023ad88cb12dc52f0b}
+
   - id: safe-tool-use
     type: skill
     version: "1.0.0"
     status: active
     path: skills/safe-tool-use
+    artifact_digest: 46d91bf32a1ec66de7c5e021d3f094d04ee4e2633616702f19fdaa0b5bcfebd4
+    definition_digest: b43bc43ce0fa17c5aea3f9bfba347ee63137cf14fbe785ec29dd354c6269af30
     description: Apply tools within scope, least privilege, and approval boundaries.
     risk_level: medium
     owner: human
     requires: []
+    compatibility: *portable_compatibility
     evaluation_suite: tests/test_skills.py
+    evaluation:
+      <<: *skill_evaluation
+      artifact_digest: 46d91bf32a1ec66de7c5e021d3f094d04ee4e2633616702f19fdaa0b5bcfebd4
+    activation:
+      <<: *task_planning_activation
+      approval_id: phase-5-migration-safe-tool-use
+      artifact_digest: 46d91bf32a1ec66de7c5e021d3f094d04ee4e2633616702f19fdaa0b5bcfebd4
+      definition_digest: b43bc43ce0fa17c5aea3f9bfba347ee63137cf14fbe785ec29dd354c6269af30
+    disabled_from: null
+    history:
+      - {from: null, to: proposed, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing capability imported", version: "1.0.0", artifact_digest: 46d91bf32a1ec66de7c5e021d3f094d04ee4e2633616702f19fdaa0b5bcfebd4}
+      - {from: proposed, to: tested, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing evaluation recorded", version: "1.0.0", artifact_digest: 46d91bf32a1ec66de7c5e021d3f094d04ee4e2633616702f19fdaa0b5bcfebd4}
+      - {from: tested, to: active, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing activation recorded", version: "1.0.0", artifact_digest: 46d91bf32a1ec66de7c5e021d3f094d04ee4e2633616702f19fdaa0b5bcfebd4}
+
   - id: documentation-maintenance
     type: skill
     version: "1.0.0"
     status: active
     path: skills/documentation-maintenance
+    artifact_digest: 5d1e9a6398a24c089cabba210b082434bc734cc7f043f39cf5a82f95b7d713ad
+    definition_digest: 12406bc4242f710a2486fa8eb0f9943cd50f2098e40963ef156df2622496f99b
     description: Maintain durable decisions and operational documentation without duplication.
     risk_level: low
     owner: human
     requires: []
+    compatibility: *portable_compatibility
     evaluation_suite: tests/test_skills.py
+    evaluation:
+      <<: *skill_evaluation
+      artifact_digest: 5d1e9a6398a24c089cabba210b082434bc734cc7f043f39cf5a82f95b7d713ad
+    activation:
+      <<: *task_planning_activation
+      approval_id: phase-5-migration-documentation-maintenance
+      artifact_digest: 5d1e9a6398a24c089cabba210b082434bc734cc7f043f39cf5a82f95b7d713ad
+      definition_digest: 12406bc4242f710a2486fa8eb0f9943cd50f2098e40963ef156df2622496f99b
+    disabled_from: null
+    history:
+      - {from: null, to: proposed, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing capability imported", version: "1.0.0", artifact_digest: 5d1e9a6398a24c089cabba210b082434bc734cc7f043f39cf5a82f95b7d713ad}
+      - {from: proposed, to: tested, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing evaluation recorded", version: "1.0.0", artifact_digest: 5d1e9a6398a24c089cabba210b082434bc734cc7f043f39cf5a82f95b7d713ad}
+      - {from: tested, to: active, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing activation recorded", version: "1.0.0", artifact_digest: 5d1e9a6398a24c089cabba210b082434bc734cc7f043f39cf5a82f95b7d713ad}
