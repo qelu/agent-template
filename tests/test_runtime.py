@@ -74,9 +74,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
                 )
                 if name == "pre-tool-event":
                     payload["type"] = "not-a-json-schema-type"
-                (schemas / f"{name}.schema.json").write_text(
-                    json.dumps(payload), encoding="utf-8"
-                )
+                (schemas / f"{name}.schema.json").write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeBoundaryError, "Invalid runtime schema"):
                 validate_runtime_schemas(root)
 
@@ -207,13 +205,23 @@ class RuntimeBoundaryTests(unittest.TestCase):
 
     def test_success_can_report_side_effects(self) -> None:
         effect = SideEffect("file-write", "notes.txt", "Updated notes.", True)
-        boundary, control = self._prepared(
-            lambda payload: ToolOutput({"saved": True}, (effect,))
-        )
+        boundary, control = self._prepared(lambda payload: ToolOutput({"saved": True}, (effect,)))
         result = boundary.execute(control)
         self.assertEqual(result.status, "succeeded")
         self.assertEqual(result.side_effects, (effect,))
         validate_runtime_event(self.root, result)
+
+    def test_reference_adapter_rejects_unenforceable_hard_timeout(self) -> None:
+        executed: list[bool] = []
+
+        def handler(_payload: dict[str, object]) -> str:
+            executed.append(True)
+            return "done"
+
+        boundary, control = self._prepared(handler)
+        with self.assertRaisesRegex(RuntimeBoundaryError, "cannot enforce hard tool timeouts"):
+            boundary.execute(control, timeout_seconds=1)
+        self.assertEqual(executed, [])
 
     def _adapter(self, handlers: dict[str, object]) -> ReferenceRuntimeAdapter:
         return ReferenceRuntimeAdapter(

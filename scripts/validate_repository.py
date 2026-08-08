@@ -17,9 +17,16 @@ from harness.deployment import (  # noqa: E402
     load_deployment,
     validate_runtime_activation,
 )
+from harness.lifecycle import (  # noqa: E402
+    LifecycleError,
+    LifecycleEngine,
+    load_lifecycle_config,
+    validate_lifecycle_runtime_compatibility,
+)
 from harness.registry import CapabilityError, load_capabilities  # noqa: E402
 from harness.policy import PolicyError, load_policy  # noqa: E402
 from harness.runtime import RuntimeBoundaryError, validate_runtime_schemas  # noqa: E402
+from harness.state_store import StateStoreError  # noqa: E402
 from harness.tool_policy import ToolPolicyError, load_tool_policies  # noqa: E402
 
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
@@ -31,6 +38,7 @@ IGNORED_DIRECTORIES = {
     ".ruff_cache",
     ".pytest_cache",
     ".mypy_cache",
+    "runtime",
 }
 REQUIRED = (
     "agent/AGENT.md",
@@ -38,22 +46,28 @@ REQUIRED = (
     "config/capabilities.yaml",
     "config/context-routes.yaml",
     "config/deployment.yaml",
+    "config/lifecycle.yaml",
     "config/persona.yaml",
     "config/policies.yaml",
     "config/schemas/capability.schema.json",
     "config/schemas/deployment.schema.json",
+    "config/schemas/lifecycle.schema.json",
     "config/schemas/approval.schema.json",
     "config/schemas/post-tool-event.schema.json",
     "config/schemas/policy.schema.json",
     "config/schemas/pre-tool-event.schema.json",
+    "config/schemas/run-state.schema.json",
     "config/schemas/tool-policy.schema.json",
     "config/tools.yaml",
     "harness/approvals.py",
     "harness/guarded_runtime.py",
     "harness/guardrails.py",
+    "harness/lifecycle.py",
+    "harness/lifecycle_runtime.py",
     "harness/reference_adapter.py",
     "harness/runtime.py",
     "harness/runtime_factory.py",
+    "harness/state_store.py",
     "harness/tool_policy.py",
     "scripts/initialize_agent.py",
     "scripts/create_extension.py",
@@ -93,7 +107,9 @@ def validate_skill(path: Path) -> list[str]:
         return [f"{skill_file.relative_to(ROOT)}: {exc}"]
     errors: list[str] = []
     if set(metadata) != {"name", "description"}:
-        errors.append(f"{skill_file.relative_to(ROOT)} frontmatter must contain only name and description")
+        errors.append(
+            f"{skill_file.relative_to(ROOT)} frontmatter must contain only name and description"
+        )
     if metadata.get("name") != path.name:
         errors.append(f"Skill name must match folder: {path.name}")
     if not str(metadata.get("description", "")).strip():
@@ -103,6 +119,7 @@ def validate_skill(path: Path) -> list[str]:
 
 def main() -> int:
     errors: list[str] = []
+    deployment: dict[str, object] | None = None
     for relative in REQUIRED:
         if not (ROOT / relative).exists():
             errors.append(f"Missing required path: {relative}")
@@ -110,6 +127,7 @@ def main() -> int:
     for relative in (
         "agent/config.yaml",
         "config/context-routes.yaml",
+        "config/lifecycle.yaml",
         "config/persona.yaml",
         "config/policies.yaml",
     ):
@@ -148,6 +166,16 @@ def main() -> int:
     try:
         ApprovalStore(ROOT)
     except (ApprovalError, OSError, ValueError) as exc:
+        errors.append(str(exc))
+
+    try:
+        lifecycle = load_lifecycle_config(ROOT)
+        LifecycleEngine(ROOT)
+        if deployment is not None:
+            runtime = deployment["runtime"]
+            if isinstance(runtime, dict):
+                validate_lifecycle_runtime_compatibility(lifecycle, str(runtime["adapter"]))
+    except (LifecycleError, StateStoreError, ConfigurationError, OSError, ValueError) as exc:
         errors.append(str(exc))
 
     registered_skill_paths = {

@@ -1,4 +1,5 @@
 import unittest
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -70,6 +71,25 @@ class ApprovalTests(unittest.TestCase):
         self.store.grant(self.event, "human:reviewer")
         with self.assertRaisesRegex(ApprovalError, "already exists"):
             self.store.grant(self.event, "human:second-reviewer")
+
+    def test_persistent_stores_cannot_grant_competing_approvals(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = Path(temporary)
+            first = ApprovalStore(
+                self.root,
+                storage_directory=storage,
+                id_factory=Sequence("approval-1"),
+                clock=Sequence("2026-08-07T12:00:00Z"),
+            )
+            second = ApprovalStore(
+                self.root,
+                storage_directory=storage,
+                id_factory=Sequence("approval-2"),
+                clock=Sequence("2026-08-07T12:01:00Z"),
+            )
+            first.grant(self.event, "human:first")
+            with self.assertRaisesRegex(ApprovalError, "already exists"):
+                second.grant(self.event, "human:second")
 
 
 if __name__ == "__main__":

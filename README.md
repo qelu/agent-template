@@ -79,6 +79,7 @@ config/
 ├── capabilities.yaml
 ├── context-routes.yaml
 ├── deployment.yaml
+├── lifecycle.yaml
 ├── persona.yaml
 ├── policies.yaml
 ├── tools.yaml
@@ -86,9 +87,11 @@ config/
     ├── approval.schema.json
     ├── capability.schema.json
     ├── deployment.schema.json
+    ├── lifecycle.schema.json
     ├── post-tool-event.schema.json
     ├── policy.schema.json
     ├── pre-tool-event.schema.json
+    ├── run-state.schema.json
     └── tool-policy.schema.json
 harness/
 ├── approvals.py
@@ -96,11 +99,14 @@ harness/
 ├── deployment.py
 ├── guarded_runtime.py
 ├── guardrails.py
+├── lifecycle.py
+├── lifecycle_runtime.py
 ├── policy.py
 ├── reference_adapter.py
 ├── registry.py
 ├── runtime.py
 ├── runtime_factory.py
+├── state_store.py
 └── tool_policy.py
 knowledge/
 └── decisions/
@@ -184,6 +190,44 @@ The reference adapter executes trusted in-process handlers, so handler implement
 part of the trusted computing base. They must use the canonical arguments and must not perform
 filesystem or network effects that their registry entry does not declare.
 
+## Executable lifecycle
+
+`config/lifecycle.yaml` defines bounded model turns, tool calls, retries, run duration, and an
+optional hard tool timeout. The managed runtime persists this state machine:
+
+```text
+created → inspecting → ready → awaiting_approval → executing → validating → completed
+```
+
+`failed`, `cancelled`, and `blocked` are terminal alternatives. Execution may return to
+`ready` for another bounded call, and validation may return to `ready` when more work is
+required. Illegal transitions fail closed. Completion requires at least one passing
+validation-evidence record and no failed evidence in the current validation round. Earlier
+failed rounds remain in the durable history and can be superseded after remediation.
+
+State is written atomically under the ignored `runtime/state/` directory, which is created
+only when a run starts. Each update uses an optimistic revision and an operating-system lock;
+files and directories use owner-only permissions. Exact approvals are persisted separately
+under the same trusted state directory and remain single-use after restart. Raw arguments
+whose keys match configured secret-redaction keys are blocked before persistence; handlers
+should receive secret-manager or environment-variable references instead of secret values.
+
+An interrupted approval pause can resume its exact persisted call. An interruption during
+execution becomes `blocked`, because its side effects are ambiguous. Partial results persist
+their reported side effects and also become `blocked`. Idempotency keys are derived from the
+run, trusted tool identity, and normalized arguments; duplicate, successful, partial,
+timed-out, or still-running keys are never executed again. Explicit retries are bounded and
+the managed runtime permits automatic retry only for trusted read-only calls.
+
+Run deadlines are always enforced before managed actions. Hard tool timeouts are enabled only
+for adapters that can actually stop execution. The in-process reference adapter declares that
+it cannot do so, and configuration requesting a hard tool timeout with that adapter is
+rejected rather than pretending cancellation occurred.
+
+The host orchestration layer must call `record_model_turn` for every model turn and use the
+managed runtime for every tool call. Bypassing that API is outside the trusted runtime
+contract and cannot claim lifecycle enforcement.
+
 ## Canonical configuration
 
 - `agent/AGENT.md` is the always-loaded behavioral contract.
@@ -191,10 +235,11 @@ filesystem or network effects that their registry entry does not declare.
 - `config/policies.yaml` is the only authorization-policy source.
 - `config/capabilities.yaml` is the only activation source.
 - `config/deployment.yaml` records host, documentation, and runtime selections.
+- `config/lifecycle.yaml` is the only lifecycle-limit and state-location source.
 - `config/tools.yaml` is the only trusted tool-policy source and grants nothing when empty.
 - `config/schemas/capability.schema.json` is enforced by repository validation.
 - `config/schemas/deployment.schema.json` enforces compatible deployment combinations.
-- Runtime, policy, tool, and approval schemas are also enforced by repository validation.
+- Runtime, lifecycle, policy, tool, state, and approval schemas are also enforced by repository validation.
 
 Every active or tested capability must have a real path and evaluation suite. New capabilities are scaffolded as `proposed` and cannot activate themselves.
 
@@ -216,7 +261,7 @@ The source template includes `examples/mcp/` and `examples/runbooks/`. They are 
 
 1. Keep one authoritative source for each setting.
 2. Load only task-relevant skills and references.
-3. Keep secrets and generated runtime data outside the repository.
+3. Keep secrets out of persistent state and generated runtime data outside version control.
 4. Keep optional integrations disabled until a runtime can enforce their permissions.
 5. Validate every machine-consumed contract.
 6. Require human review before promoting proposed capabilities.

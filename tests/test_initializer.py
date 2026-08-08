@@ -69,6 +69,11 @@ class InitializerTests(unittest.TestCase):
                 (destination / "config" / "tools.yaml").read_text(encoding="utf-8")
             )
             self.assertEqual(tools, {"version": "1.0", "tools": []})
+            lifecycle = yaml.safe_load(
+                (destination / "config" / "lifecycle.yaml").read_text(encoding="utf-8")
+            )
+            self.assertEqual(lifecycle["state_directory"], "runtime/state")
+            self.assertFalse((destination / "runtime").exists())
             for filename in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
                 self.assertFalse((destination / filename).exists())
             self.assertEqual(list(destination.glob("skills/*/agents")), [])
@@ -114,9 +119,7 @@ class InitializerTests(unittest.TestCase):
                     result = self._initialize(destination, host, override)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     deployment = yaml.safe_load(
-                        (destination / "config" / "deployment.yaml").read_text(
-                            encoding="utf-8"
-                        )
+                        (destination / "config" / "deployment.yaml").read_text(encoding="utf-8")
                     )
                     self.assertEqual(deployment["host"], host)
                     self.assertEqual(deployment["documentation"]["provider"], provider)
@@ -125,7 +128,9 @@ class InitializerTests(unittest.TestCase):
                         self.assertTrue((destination / mcp_path).is_file())
                     if provider == "anthropic":
                         self.assertTrue(
-                            (destination / "skills" / "anthropic-documentation" / "SKILL.md").is_file()
+                            (
+                                destination / "skills" / "anthropic-documentation" / "SKILL.md"
+                            ).is_file()
                         )
                     validation = subprocess.run(
                         [
@@ -153,9 +158,7 @@ class InitializerTests(unittest.TestCase):
                         text=True,
                         env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
                     )
-                    self.assertEqual(
-                        generated_tests.returncode, 0, generated_tests.stderr
-                    )
+                    self.assertEqual(generated_tests.returncode, 0, generated_tests.stderr)
 
     def test_reference_runtime_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -177,15 +180,11 @@ class InitializerTests(unittest.TestCase):
 
     def test_rejects_mcp_for_portable_host_and_unimplemented_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            portable = self._initialize(
-                Path(temporary) / "portable-openai", "portable", "openai"
-            )
+            portable = self._initialize(Path(temporary) / "portable-openai", "portable", "openai")
             self.assertNotEqual(portable.returncode, 0)
             self.assertIn("requires a concrete --host", portable.stderr)
 
-            runtime = self._initialize(
-                Path(temporary) / "runtime", "codex", None, "openai-agents"
-            )
+            runtime = self._initialize(Path(temporary) / "runtime", "codex", None, "openai-agents")
             self.assertNotEqual(runtime.returncode, 0)
             self.assertIn("not implemented", runtime.stderr)
 

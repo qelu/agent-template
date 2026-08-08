@@ -43,6 +43,9 @@ class GuardedRuntime:
     def start_run(self) -> RunContext:
         return self._boundary.start_run()
 
+    def restore_run(self, run: RunContext) -> None:
+        self._boundary.restore_run(run)
+
     def prepare_tool_call(
         self, run: RunContext, tool_id: str, arguments: dict[str, Any]
     ) -> ToolCallControl:
@@ -85,14 +88,14 @@ class GuardedRuntime:
         self._authorized.add(tool_call_id)
         return control
 
-    def execute(self, control: ToolCallControl) -> PostToolEvent:
+    def execute(
+        self, control: ToolCallControl, timeout_seconds: int | None = None
+    ) -> PostToolEvent:
         call_id = control.event.tool_call_id
         if call_id not in self._authorized:
-            raise GuardedRuntimeError(
-                f"Tool call has not passed trusted guardrails: {call_id}"
-            )
+            raise GuardedRuntimeError(f"Tool call has not passed trusted guardrails: {call_id}")
         self._authorized.remove(call_id)
-        event = self._boundary.execute(control)
+        event = self._boundary.execute(control, timeout_seconds)
         decision = self._decisions[call_id]
         classified = replace(
             event,
@@ -101,8 +104,36 @@ class GuardedRuntime:
         self._boundary.validate_event(classified)
         return classified
 
+    def restore_pending(self, event: PreToolEvent) -> ToolCallControl:
+        """Restore only a call that current trusted policy still pauses."""
+        decision = self._guardrails.evaluate(event)
+        if decision.outcome != GuardrailOutcome.PAUSE:
+            raise GuardedRuntimeError(
+                "Persisted approval call no longer matches a pausing policy decision"
+            )
+        control = self._boundary.restore_paused_call(event)
+        self._pending[event.tool_call_id] = event
+        self._decisions[event.tool_call_id] = decision
+        return control
+
+    def abandon(self, control: ToolCallControl, reason: str) -> ToolCallControl:
+        """Remove all guarded authorization for a call and close the boundary call."""
+        call_id = control.event.tool_call_id
+        self._authorized.discard(call_id)
+        self._pending.pop(call_id, None)
+        return self._boundary.abandon(control, reason)
+
     def decision_for(self, tool_call_id: str) -> GuardrailDecision:
         try:
             return self._decisions[tool_call_id]
         except KeyError as exc:
             raise GuardedRuntimeError(f"No guardrail decision for call: {tool_call_id}") from exc
+
+    def pending_event(self, tool_call_id: str) -> PreToolEvent:
+        """Return the adapter-owned event for one exact pending approval call."""
+        try:
+            return self._pending[tool_call_id]
+        except KeyError as exc:
+            raise GuardedRuntimeError(
+                f"Tool call is not pending trusted approval: {tool_call_id}"
+            ) from exc

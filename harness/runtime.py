@@ -17,6 +17,10 @@ class RuntimeBoundaryError(RuntimeError):
     """Raised when a tool call violates the runtime boundary contract."""
 
 
+class ToolTimeoutError(RuntimeError):
+    """Raised by an adapter only after it has actually terminated timed-out execution."""
+
+
 class ControlState(str, Enum):
     READY = "ready"
     BLOCKED = "blocked"
@@ -85,6 +89,7 @@ class RuntimeAdapter(Protocol):
     """Adapter-owned source of trusted run, call, actor, and timing fields."""
 
     name: str
+    supports_hard_timeouts: bool
 
     def start_run(self) -> RunContext: ...
 
@@ -92,7 +97,11 @@ class RuntimeAdapter(Protocol):
         self, run: RunContext, tool_id: str, arguments: dict[str, Any]
     ) -> PreToolEvent: ...
 
-    def execute(self, event: PreToolEvent) -> PostToolEvent: ...
+    def execute(self, event: PreToolEvent, timeout_seconds: int | None = None) -> PostToolEvent: ...
+
+    def restore_run(self, run: RunContext) -> None: ...
+
+    def restore_call(self, event: PreToolEvent) -> None: ...
 
 
 class RuntimeBoundary:
@@ -111,6 +120,10 @@ class RuntimeBoundary:
 
     def start_run(self) -> RunContext:
         return self._require_adapter().start_run()
+
+    def restore_run(self, run: RunContext) -> None:
+        """Restore adapter bookkeeping for a persisted non-terminal run."""
+        self._require_adapter().restore_run(run)
 
     def prepare_tool_call(
         self, run: RunContext, tool_id: str, arguments: dict[str, Any]
@@ -131,9 +144,7 @@ class RuntimeBoundary:
             event=control.event, state=ControlState.BLOCKED, reason=normalized_reason
         )
 
-    def pause_for_approval(
-        self, control: ToolCallControl, reason: str
-    ) -> ToolCallControl:
+    def pause_for_approval(self, control: ToolCallControl, reason: str) -> ToolCallControl:
         self._require_ready(control)
         normalized_reason = _required(reason, "reason")
         call_id = control.event.tool_call_id
@@ -150,10 +161,46 @@ class RuntimeBoundary:
         try:
             event = self._paused.pop(tool_call_id)
         except KeyError as exc:
-            raise RuntimeBoundaryError(f"Tool call is not awaiting approval: {tool_call_id}") from exc
+            raise RuntimeBoundaryError(
+                f"Tool call is not awaiting approval: {tool_call_id}"
+            ) from exc
         return ToolCallControl(event=event, state=ControlState.READY)
 
-    def execute(self, control: ToolCallControl) -> PostToolEvent:
+    def restore_paused_call(self, event: PreToolEvent) -> ToolCallControl:
+        """Restore an adapter-owned persisted call after process interruption."""
+        validate_runtime_event(self._schema_root, event)
+        call_id = event.tool_call_id
+        if call_id in self._prepared or call_id in self._closed:
+            raise RuntimeBoundaryError(f"Tool call is already known: {call_id}")
+        adapter = self._require_adapter()
+        adapter.restore_call(event)
+        self._prepared[call_id] = _snapshot(event)
+        self._paused[call_id] = event
+        return ToolCallControl(
+            event=event,
+            state=ControlState.AWAITING_APPROVAL,
+            reason="Restored persisted approval pause",
+        )
+
+    def abandon(self, control: ToolCallControl, reason: str) -> ToolCallControl:
+        """Close a prepared or paused call without executing it."""
+        call_id = control.event.tool_call_id
+        expected = self._prepared.get(call_id)
+        if expected is None or expected != _snapshot(control.event):
+            raise RuntimeBoundaryError(f"Tool call was not prepared by this boundary: {call_id}")
+        if call_id in self._closed:
+            raise RuntimeBoundaryError(f"Tool call is already closed: {call_id}")
+        self._paused.pop(call_id, None)
+        self._closed.add(call_id)
+        return ToolCallControl(
+            event=control.event,
+            state=ControlState.BLOCKED,
+            reason=_required(reason, "reason"),
+        )
+
+    def execute(
+        self, control: ToolCallControl, timeout_seconds: int | None = None
+    ) -> PostToolEvent:
         self._require_ready(control)
         call_id = control.event.tool_call_id
         if call_id in self._paused:
@@ -161,7 +208,16 @@ class RuntimeBoundary:
         if call_id in self._closed:
             raise RuntimeBoundaryError(f"Tool call is already closed: {call_id}")
         self._closed.add(call_id)
-        result = self._require_adapter().execute(control.event)
+        adapter = self._require_adapter()
+        if timeout_seconds is not None and not adapter.supports_hard_timeouts:
+            raise RuntimeBoundaryError(
+                f"Runtime adapter cannot enforce hard tool timeouts: {adapter.name}"
+            )
+        result = (
+            adapter.execute(control.event)
+            if timeout_seconds is None
+            else adapter.execute(control.event, timeout_seconds)
+        )
         if not isinstance(result, PostToolEvent):
             raise RuntimeBoundaryError("Runtime adapter returned an invalid post-tool event")
         validate_runtime_event(self._schema_root, result)
@@ -187,7 +243,9 @@ class RuntimeBoundary:
         if expected is None:
             raise RuntimeBoundaryError(f"Tool call was not prepared by this boundary: {call_id}")
         if expected != _snapshot(control.event):
-            raise RuntimeBoundaryError(f"Trusted tool-call fields changed after preparation: {call_id}")
+            raise RuntimeBoundaryError(
+                f"Trusted tool-call fields changed after preparation: {call_id}"
+            )
 
 
 def validate_runtime_schemas(root: Path) -> None:
@@ -214,11 +272,11 @@ def validate_runtime_event(root: Path, event: PreToolEvent | PostToolEvent) -> N
     try:
         payload = event.to_dict()
     except (TypeError, ValueError) as exc:
-        raise RuntimeBoundaryError(f"Invalid {name} event: values must be JSON serializable") from exc
+        raise RuntimeBoundaryError(
+            f"Invalid {name} event: values must be JSON serializable"
+        ) from exc
     errors = sorted(
-        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(
-            payload
-        ),
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(payload),
         key=lambda error: tuple(str(part) for part in error.absolute_path),
     )
     if errors:
@@ -228,13 +286,10 @@ def validate_runtime_event(root: Path, event: PreToolEvent | PostToolEvent) -> N
     if name == "post-tool-event":
         timestamp_fields.extend(("started_at", "completed_at"))
     timestamps = {
-        field: _validate_timestamp(payload[field], name, field)
-        for field in timestamp_fields
+        field: _validate_timestamp(payload[field], name, field) for field in timestamp_fields
     }
     if name == "post-tool-event" and not (
-        timestamps["requested_at"]
-        <= timestamps["started_at"]
-        <= timestamps["completed_at"]
+        timestamps["requested_at"] <= timestamps["started_at"] <= timestamps["completed_at"]
     ):
         raise RuntimeBoundaryError(
             "Invalid post-tool-event event: timestamps must be chronological"
@@ -249,9 +304,7 @@ def _required(value: str, field: str) -> str:
 
 
 def _snapshot(event: PreToolEvent) -> str:
-    return json.dumps(
-        event.to_dict(), sort_keys=True, separators=(",", ":"), allow_nan=False
-    )
+    return json.dumps(event.to_dict(), sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def _validate_correlation(pre: PreToolEvent, post: PostToolEvent) -> None:
@@ -287,7 +340,5 @@ def _validate_timestamp(value: str, event_name: str, field: str) -> datetime:
             f"Invalid {event_name} event: {field} must be an RFC 3339 timestamp"
         ) from exc
     if parsed.tzinfo is None:
-        raise RuntimeBoundaryError(
-            f"Invalid {event_name} event: {field} must include a UTC offset"
-        )
+        raise RuntimeBoundaryError(f"Invalid {event_name} event: {field} must include a UTC offset")
     return parsed

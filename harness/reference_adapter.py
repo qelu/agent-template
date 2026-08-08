@@ -45,6 +45,7 @@ class ReferenceRuntimeAdapter:
     """In-process adapter with explicit registered handlers and adapter-owned metadata."""
 
     name = "reference"
+    supports_hard_timeouts = False
 
     def __init__(
         self,
@@ -69,6 +70,19 @@ class ReferenceRuntimeAdapter:
             raise ValueError(f"Generated duplicate run ID: {run_id}")
         self._runs.add(run_id)
         return RunContext(run_id=run_id, actor=self._actor)
+
+    def restore_run(self, run: RunContext) -> None:
+        """Re-register a persisted run without minting trusted identity fields."""
+        if run.actor != self._actor:
+            raise ValueError("Persisted run actor does not match this adapter")
+        self._runs.add(_required(run.run_id, "run ID"))
+
+    def restore_call(self, event: PreToolEvent) -> None:
+        """Re-register a persisted call for approval resumption only."""
+        self.restore_run(RunContext(event.run_id, event.actor))
+        if event.tool_id not in self._handlers:
+            raise ValueError(f"Tool is not registered with the adapter: {event.tool_id}")
+        self._calls.add(_required(event.tool_call_id, "tool call ID"))
 
     def create_pre_tool_event(
         self, run: RunContext, tool_id: str, arguments: dict[str, Any]
@@ -103,19 +117,17 @@ class ReferenceRuntimeAdapter:
             actor=self._actor,
         )
 
-    def execute(self, event: PreToolEvent) -> PostToolEvent:
+    def execute(self, event: PreToolEvent, timeout_seconds: int | None = None) -> PostToolEvent:
+        if timeout_seconds is not None:
+            raise ValueError("Reference adapter cannot enforce hard tool timeouts")
         started_at = self._clock()
         handler = self._handlers[event.tool_id]
         try:
             execution_arguments = _json_copy(event.arguments)
             if self._argument_normalizer is not None:
-                current_arguments = self._argument_normalizer(
-                    event.tool_id, execution_arguments
-                )
+                current_arguments = self._argument_normalizer(event.tool_id, execution_arguments)
                 if current_arguments != event.arguments:
-                    raise ValueError(
-                        "Normalized tool arguments changed before execution"
-                    )
+                    raise ValueError("Normalized tool arguments changed before execution")
                 execution_arguments = current_arguments
             value = handler(execution_arguments)
             result = value if isinstance(value, ToolOutput) else ToolOutput(output=value)

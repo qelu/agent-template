@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
+import tempfile
+import fcntl
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
@@ -46,24 +50,31 @@ class ApprovalStore:
         *,
         id_factory: Callable[[], str] | None = None,
         clock: Callable[[], str] | None = None,
+        storage_directory: Path | None = None,
     ) -> None:
         try:
             self._schema = json.loads(
-                (root / "config" / "schemas" / "approval.schema.json").read_text(
-                    encoding="utf-8"
-                )
+                (root / "config" / "schemas" / "approval.schema.json").read_text(encoding="utf-8")
             )
             Draft202012Validator.check_schema(self._schema)
         except (OSError, ValueError, TypeError, SchemaError) as exc:
             raise ApprovalError(f"Invalid trusted approval schema: {exc}") from exc
         self._id_factory = id_factory or (lambda: secrets.token_urlsafe(24))
         self._clock = clock or _utc_now
+        self._storage_directory = storage_directory
         self._records: dict[str, ApprovalRecord] = {}
-        self._by_call: dict[str, str] = {}
+        self._by_call: dict[tuple[str, str], str] = {}
+        self._load_persistent_records()
 
     def grant(self, event: PreToolEvent, granted_by: str) -> ApprovalRecord:
         """Create a record from an adapter-owned event, never caller-supplied metadata."""
-        if event.tool_call_id in self._by_call:
+        with self._persistent_lock():
+            self._refresh_persistent_records()
+            return self._grant(event, granted_by)
+
+    def _grant(self, event: PreToolEvent, granted_by: str) -> ApprovalRecord:
+        call_key = (event.run_id, event.tool_call_id)
+        if call_key in self._by_call:
             raise ApprovalError(f"Approval already exists for call: {event.tool_call_id}")
         approval_id = _required(self._id_factory(), "generated approval ID")
         if approval_id in self._records:
@@ -81,12 +92,18 @@ class ApprovalStore:
             consumed_at=None,
         )
         self._validate(record)
+        self._persist(record)
         self._records[approval_id] = record
-        self._by_call[event.tool_call_id] = approval_id
+        self._by_call[call_key] = approval_id
         return record
 
     def consume(self, event: PreToolEvent, approval_id: str) -> ApprovalRecord:
         """Consume only an unused approval bound to every trusted call field."""
+        with self._persistent_lock():
+            self._refresh_persistent_records()
+            return self._consume(event, approval_id)
+
+    def _consume(self, event: PreToolEvent, approval_id: str) -> ApprovalRecord:
         try:
             record = self._records[approval_id]
         except KeyError as exc:
@@ -109,10 +126,12 @@ class ApprovalStore:
             raise ApprovalError("Approval does not match the exact trusted tool call")
         consumed = replace(record, consumed_at=self._clock())
         self._validate(consumed)
+        self._persist(consumed)
         self._records[approval_id] = consumed
         return consumed
 
     def get(self, approval_id: str) -> ApprovalRecord:
+        self._refresh_persistent_records()
         try:
             return self._records[approval_id]
         except KeyError as exc:
@@ -120,9 +139,9 @@ class ApprovalStore:
 
     def _validate(self, record: ApprovalRecord) -> None:
         errors = sorted(
-            Draft202012Validator(
-                self._schema, format_checker=FormatChecker()
-            ).iter_errors(record.to_dict()),
+            Draft202012Validator(self._schema, format_checker=FormatChecker()).iter_errors(
+                record.to_dict()
+            ),
             key=lambda error: tuple(str(part) for part in error.absolute_path),
         )
         if errors:
@@ -133,6 +152,104 @@ class ApprovalStore:
             consumed_at = _validate_timestamp(record.consumed_at, "consumed_at")
             if consumed_at < granted_at:
                 raise ApprovalError("consumed_at must not precede granted_at")
+
+    def _load_persistent_records(self) -> None:
+        if self._storage_directory is None:
+            return
+        directory = self._storage_directory / "approvals"
+        if not directory.exists():
+            return
+        try:
+            paths = sorted(directory.glob("*.json"))
+            for path in paths:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                record = ApprovalRecord(**payload)
+                self._validate(record)
+                if record.approval_id in self._records:
+                    raise ApprovalError(f"Duplicate persisted approval: {record.approval_id}")
+                call_key = (record.run_id, record.tool_call_id)
+                if call_key in self._by_call:
+                    raise ApprovalError(
+                        f"Multiple persisted approvals for call: {record.tool_call_id}"
+                    )
+                self._records[record.approval_id] = record
+                self._by_call[call_key] = record.approval_id
+        except (OSError, ValueError, TypeError) as exc:
+            raise ApprovalError(f"Invalid persisted approval state: {exc}") from exc
+
+    def _refresh_persistent_records(self) -> None:
+        if self._storage_directory is None:
+            return
+        self._records = {}
+        self._by_call = {}
+        self._load_persistent_records()
+
+    @contextmanager
+    def _persistent_lock(self) -> Iterator[None]:
+        if self._storage_directory is None:
+            yield
+            return
+        directory = self._storage_directory / "approvals"
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(directory, 0o700)
+        descriptor = os.open(directory / ".lock", os.O_CREAT | os.O_WRONLY, 0o600)
+        try:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise ApprovalError("Approval state is locked by another writer") from exc
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
+
+    def _persist(self, record: ApprovalRecord) -> None:
+        if self._storage_directory is None:
+            return
+        directory = self._storage_directory / "approvals"
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(directory, 0o700)
+        filename = hashlib.sha256(record.approval_id.encode("utf-8")).hexdigest()
+        destination = directory / f"{filename}.json"
+        serialized = (
+            json.dumps(
+                record.to_dict(),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            )
+            + "\n"
+        )
+        temporary_name: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=directory,
+                prefix=f".{filename}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temporary_name = handle.name
+                os.chmod(temporary_name, 0o600)
+                handle.write(serialized)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_name, destination)
+            directory_fd = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except OSError as exc:
+            raise ApprovalError(f"Cannot persist approval state: {exc}") from exc
+        finally:
+            if temporary_name is not None:
+                try:
+                    Path(temporary_name).unlink()
+                except FileNotFoundError:
+                    pass
 
 
 def arguments_digest(arguments: dict[str, Any]) -> str:

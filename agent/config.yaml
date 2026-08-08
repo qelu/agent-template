@@ -5,3 +5,4 @@ persona: config/persona.yaml
 capabilities: config/capabilities.yaml
 deployment: config/deployment.yaml
 tool_policies: config/tools.yaml
+lifecycle: config/lifecycle.yaml

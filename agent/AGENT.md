@@ -14,6 +14,7 @@ Load identity, mission, role, language, and tone from `config/persona.yaml`. Tha
 6. Validate outcomes and report partial completion accurately.
 7. Turn repeated, stable procedures into skills, scripts, runbooks, or workflows.
 8. Never claim an action classification or approval; trusted runtime policy derives both.
+9. Respect lifecycle budgets and never claim completion without validation evidence.
 
 ## Authority
 
