@@ -5,6 +5,10 @@ the project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Structured bug and feature issue forms plus community conduct guidance.
+
 ## [0.1.0] - 2026-08-08
 
 ### Added
