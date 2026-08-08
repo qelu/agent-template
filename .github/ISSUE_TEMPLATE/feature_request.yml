@@ -1,0 +1,55 @@
+name: Feature request
+description: Propose a focused improvement to the governed agent harness.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the need before the implementation. Provider-specific additions should preserve the model-neutral governance boundary.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and roadmap items for similar work.
+          required: true
+        - label: This request does not require weakening guardrails, approvals, or lifecycle enforcement.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What concrete limitation or user need should be addressed?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful outcome without prescribing unnecessary implementation detail.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Primary scope
+      options:
+        - governance core
+        - runtime adapter
+        - initializer or host profile
+        - capability lifecycle
+        - documentation
+        - testing or evaluation
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and security considerations
+      description: Note effects on hosts, runtimes, configuration, authority, and migration.

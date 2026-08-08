@@ -2,6 +2,8 @@
 
 Contributions are welcome through pull requests.
 
+By participating, you agree to follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
 ## Development workflow
 
 1. Fork the repository and create a focused branch from `main`.
