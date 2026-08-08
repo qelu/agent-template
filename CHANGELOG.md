@@ -8,6 +8,9 @@ the project follows Semantic Versioning.
 ### Added
 
 - Structured bug and feature issue forms plus community conduct guidance.
+- A reusable runtime-adapter conformance suite.
+- An isolated end-to-end reference runner covering plans, approvals, execution,
+  validation, and persisted lifecycle state.
 
 ## [0.1.0] - 2026-08-08
 
