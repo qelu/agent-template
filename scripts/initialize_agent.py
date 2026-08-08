@@ -25,7 +25,7 @@ from harness.registry import (  # noqa: E402
 TEXT_SUFFIXES = {"", ".md", ".yaml", ".yml", ".json", ".toml", ".py", ".txt", ".example"}
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
 PROJECT_NAME_PLACEHOLDER = "agent-template-placeholder"
-ROOT_FILES = (".env.example", ".gitignore", "README.md", "pyproject.toml")
+ROOT_FILES = (".env.example", ".gitignore", "LICENSE", "pyproject.toml")
 ROOT_DIRECTORIES = ("agent", "config", "harness", "scripts", "skills", "templates", "tests")
 HOSTS = ("portable", "codex", "claude-code", "gemini-cli")
 DOCUMENTATION_PROVIDERS = ("none", "openai", "anthropic", "gemini")
@@ -112,6 +112,7 @@ def copy_minimal_template(source: Path, destination: Path) -> None:
     destination.mkdir()
     for filename in ROOT_FILES:
         shutil.copy2(source / filename, destination / filename)
+    shutil.copy2(source / "templates" / "generated-README.md", destination / "README.md")
     for dirname in ROOT_DIRECTORIES:
         ignored_names = [
             ".git",

@@ -42,6 +42,10 @@ class InitializerTests(unittest.TestCase):
             project = (destination / "pyproject.toml").read_text(encoding="utf-8")
             self.assertIn('name = "sample"', project)
             self.assertNotIn("agent-template-placeholder", project)
+            readme = (destination / "README.md").read_text(encoding="utf-8")
+            self.assertIn("# Sample", readme)
+            self.assertNotIn("github.com/qelu/agent-template", readme)
+            self.assertTrue((destination / "LICENSE").is_file())
 
             expected = {
                 "agent",

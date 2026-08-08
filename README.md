@@ -1,309 +1,249 @@
-# Reusable AI Agent Template
+<div align="center">
 
-This repository creates minimal, governed agent harnesses. The default output contains one agent contract, canonical capability and tool-policy registries, executable configuration validation, four concise skills, extension scaffolding, and tests. Optional operational examples are kept in this source repository and are not copied into new agents.
+# Agent Template
 
-## Create an agent
+### A model-agnostic, security-conscious harness for governed AI agents
 
-```bash
-python3 scripts/initialize_agent.py --destination ../research-agent
+[![CI](https://github.com/qelu/agent-template/actions/workflows/ci.yml/badge.svg)](https://github.com/qelu/agent-template/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)
+![Version](https://img.shields.io/badge/version-v0.1.0-7C3AED)
+[![License](https://img.shields.io/badge/license-Apache--2.0-0EA5E9)](LICENSE)
+
+Build small agents with explicit authority, revision-bound plans, auditable
+capabilities, and portable host configuration.
+
+</div>
+
+> [!IMPORTANT]
+> Version 0.1.0 is an early public release. The governance core and deterministic
+> reference adapter are implemented and tested. Provider SDK runtime adapters are
+> extension points, not production-ready integrations.
+
+## What this is
+
+Agent Template is a Python foundation for agents whose behavior is constrained by
+code and configuration—not only by prompts. It separates a provider-neutral runtime
+contract from host-specific setup, then places policy checks around every tool call.
+
+It is intended for developers who want a legible starting point for building agents
+without coupling their governance model to one model vendor or agent application.
+
+## Key features
+
+| Capability | What it provides |
+| --- | --- |
+| Model-neutral boundary | A common request/result interface; provider details stay in adapters. |
+| Exact-scope approvals | Approval is bound to an action, normalized arguments, risk, plan revision, and expiry. |
+| Guardrails | Declarative allowlists, risk levels, argument constraints, and approval requirements. |
+| Revision-bound plans | Materially changed work requires a new plan revision and fresh approval. |
+| Lifecycle controls | Prepare, execute, validate, complete, fail, recover, and clean up with persisted state. |
+| Capability governance | Scaffold, evaluate, activate, detect drift, deprecate, roll back, and audit extensions. |
+| Multi-host initialization | Generate portable, Codex, Claude Code, or Gemini CLI projects. |
+| Current documentation | Configure official-documentation access appropriate to the selected host/provider. |
+| Progressive disclosure | Keep the core agent contract short; load deeper policies only when relevant. |
+| Validation by default | Repository checks, behavioral tests, linting, CI, and dependency update automation. |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A["Agent request"] --> P["Revision-bound plan"]
+    P --> R["Runtime adapter"]
+    R --> G["Guardrails + approval gate"]
+    G --> T["Tool handler"]
+    T --> L["Lifecycle + audit state"]
+    C["YAML configuration"] --> P
+    C --> G
+    C --> L
+    H["Codex / Claude Code / Gemini CLI"] --> A
 ```
 
-The initializer prompts for name, identifier, mission, role, tone, and language. Every value can also be provided as a flag:
+The core boundary is provider-independent. `reference` is a deterministic adapter
+for validation and development. `openai-agents`, `claude-agent-sdk`, and `google-adk`
+are named future adapter targets and are deliberately rejected until implemented.
+
+## Quick start
+
+Prerequisites: Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-python3 scripts/initialize_agent.py \
+git clone https://github.com/qelu/agent-template.git
+cd agent-template
+uv sync --extra dev
+uv run python scripts/validate_repository.py
+uv run python -m unittest discover -s tests -v
+```
+
+Create a minimal portable agent outside this repository:
+
+```bash
+uv run python scripts/initialize_agent.py \
   --destination ../research-agent \
-  --name "Axiom" \
-  --id axiom \
-  --goal "Research technical questions and produce cited, reproducible answers." \
-  --role "research and analysis partner" \
-  --tone "clear, skeptical, and concise" \
-  --language en-US \
-  --host codex
-```
-
-The deployment profile separates three axes:
-
-- `--host`: `portable`, `codex`, `claude-code`, or `gemini-cli`.
-- `--docs-provider`: `none`, `openai`, `anthropic`, or `gemini`.
-- `--runtime`: `none` or the executable, provider-neutral `reference` adapter.
-
-When `--docs-provider` is omitted, each concrete host selects its matching documentation
-provider. The portable default selects none. Documentation and host can also be mixed, such
-as Gemini documentation in Claude Code:
-
-```bash
-python3 scripts/initialize_agent.py \
-  --destination ../cross-provider-agent \
-  --name "Atlas" \
-  --goal "Build integrations from current primary documentation." \
-  --role "implementation partner" \
-  --tone "precise" \
-  --host claude-code \
-  --docs-provider gemini
-```
-
-The initializer writes only project-scoped configuration. It never modifies global Codex,
-Claude Code, or Gemini CLI settings.
-
-| Documentation provider | Generated capability | Official source |
-| --- | --- | --- |
-| OpenAI | HTTP MCP server | `https://developers.openai.com/mcp` |
-| Gemini | HTTP MCP server | `https://gemini-api-docs-mcp.dev` |
-| Anthropic | Documentation-fetch skill | Anthropic's official `llms.txt` indexes |
-| None | No documentation integration | — |
-
-Anthropic does not currently publish a verified first-party documentation MCP endpoint, so
-that profile uses a small skill which discovers pages through the official Anthropic API and
-Claude Code documentation indexes. Generated MCP files still require the host's normal trust
-or approval flow before use.
-
-Provider SDK adapters (`openai-agents`, `claude-agent-sdk`, and `google-adk`) are named future
-targets but are rejected until they implement the same runtime contract.
-
-Validate the generated agent:
-
-```bash
-cd ../research-agent
-python3 scripts/validate_repository.py
-python3 -m unittest discover -s tests -v
-```
-
-## Minimal generated structure
-
-```text
-agent/
-├── AGENT.md
-└── config.yaml
-config/
-├── capabilities.yaml
-├── context-routes.yaml
-├── deployment.yaml
-├── lifecycle.yaml
-├── persona.yaml
-├── policies.yaml
-├── tools.yaml
-└── schemas/
-    ├── approval.schema.json
-    ├── capability.schema.json
-    ├── deployment.schema.json
-    ├── lifecycle.schema.json
-    ├── post-tool-event.schema.json
-    ├── policy.schema.json
-    ├── plan-approval.schema.json
-    ├── pre-tool-event.schema.json
-    ├── run-state.schema.json
-    └── tool-policy.schema.json
-harness/
-├── approvals.py
-├── configuration.py
-├── deployment.py
-├── guarded_runtime.py
-├── guardrails.py
-├── lifecycle.py
-├── lifecycle_runtime.py
-├── policy.py
-├── plans.py
-├── reference_adapter.py
-├── registry.py
-├── runtime.py
-├── runtime_factory.py
-├── state_store.py
-└── tool_policy.py
-knowledge/
-└── decisions/
-scripts/
-├── create_extension.py
-├── initialize_agent.py
-├── manage_capability.py
-└── validate_repository.py
-skills/
-├── documentation-maintenance/
-├── evidence-gathering/
-├── safe-tool-use/
-└── task-planning/
-templates/
-├── skill/
-├── workflow/
-├── adr-template.md
-└── runbook-template.md
-tests/
-```
-
-Concrete host profiles additionally create exactly one thin instruction entrypoint
-(`AGENTS.md`, `CLAUDE.md`, or `GEMINI.md`) and, when required, that host's project-level MCP
-file. `agent/AGENT.md` remains canonical.
-
-## Runtime boundary
-
-Select the reference adapter when developing or testing executable runtime behavior:
-
-```bash
-python3 scripts/initialize_agent.py \
-  --destination ../runtime-agent \
-  --name "Boundary" \
-  --goal "Execute registered tools through a normalized boundary." \
-  --role "runtime test agent" \
-  --tone "concise" \
+  --name "Research Agent" \
+  --id research-agent \
+  --goal "Produce cited research within an approved scope." \
+  --role "research assistant" \
+  --tone "clear and evidence-led" \
   --runtime reference
 ```
 
-`harness/runtime.py` defines the adapter protocol and control boundary. The adapter—not model
-output—creates the run ID, tool-call ID, actor, timestamps, tool identity, and normalized
-argument snapshot. `harness/runtime_factory.py` reads the deployment profile and constructs
-that selected boundary. A call may be allowed, permanently blocked, or paused and resumed
-using the same integrity-checked event snapshot. Calls execute at most once.
+The initializer refuses to overwrite an existing destination. It copies only the
+minimal governed core, generates a project-specific README, replaces identity
+placeholders, records deployment choices, and refreshes capability attestations.
 
-Every execution produces a schema-validated post-tool event with `succeeded`, `failed`, or
-`partial` status. Partial results must identify each completed side effect, its exact target,
-and whether it is reversible. An active runtime hook is invalid unless a runtime adapter is
-selected.
+## Choose a host and documentation provider
 
-The reference adapter is deliberately in-process and provider-neutral. It proves the boundary
-contract with registered handlers; it is not an OpenAI, Anthropic, or Google production SDK
-adapter. The guarded runtime binds approval resumes to exact calls and derives authorization
-from the trusted tool-policy registry described below.
+Host defaults keep generated projects useful without baking vendor behavior into
+the core contract.
 
-## Trusted guardrails
+| Host | Entry point | Default docs integration |
+| --- | --- | --- |
+| `portable` | `agent/AGENT.md` | None |
+| `codex` | `AGENTS.md` | OpenAI documentation MCP |
+| `claude-code` | `CLAUDE.md` | Anthropic documentation skill |
+| `gemini-cli` | `GEMINI.md` | Gemini documentation MCP |
 
-`config/tools.yaml` is the only source of tool authority and is empty by default. A runtime
-handler that is not also present in that registry is blocked. Each entry declares its base
-action and risk, monotonic argument rules, filesystem paths, shell command fields, exact
-network hosts, private-data egress behavior, approval requirement, and output trust.
+```bash
+# Codex with its default OpenAI documentation integration
+uv run python scripts/initialize_agent.py ... --host codex
 
-The adapter canonicalizes declared paths and hosts before creating the trusted pre-tool event.
-Guardrails then:
+# Claude Code using a Gemini documentation MCP instead
+uv run python scripts/initialize_agent.py ... \
+  --host claude-code --docs-provider gemini
+```
 
-- reject caller-supplied classification, identity, or approval fields;
-- raise classifications based on trusted argument rules, never lower them;
-- resolve paths against configured roots and follow existing symlinks before containment
-  checks, then recheck canonical paths immediately before handler execution;
-- reject patterns and allowed-root targets for destructive operations;
-- block configured shell-deny patterns even when approval is supplied;
-- require exact allowlisted hostnames for outbound tools;
-- block sensitive-key egress unless the tool explicitly allows it with approval; and
-- label guarded outputs as `trusted` or `untrusted` in the post-tool event.
+Valid providers are `none`, `openai`, `anthropic`, and `gemini`. MCP-backed
+documentation requires a concrete host because each host stores MCP configuration
+differently. The Anthropic option uses official documentation indexes through a
+governed skill rather than pretending an official MCP exists.
 
-Approval records are created from paused adapter-owned events and bind the run ID, call ID,
-tool ID, and canonical-argument digest. They live in the trusted store and are single-use.
-The host-only `GuardedRuntime.grant` method must never be exposed as a model-callable tool;
-model-provided approval objects, IDs, booleans, or classifications have no authority.
+## How governed execution works
 
-The reference adapter executes trusted in-process handlers, so handler implementations remain
-part of the trusted computing base. They must use the canonical arguments and must not perform
-filesystem or network effects that their registry entry does not declare.
+1. Inspect the request and relevant repository state.
+2. Create a plan revision for the bounded implementation.
+3. Obtain approval for that exact revision when policy requires it.
+4. Prepare lifecycle state and normalize the proposed tool call.
+5. Evaluate allowlists, argument constraints, risk, and approval scope.
+6. Execute through the selected runtime and registered handler.
+7. Validate the result, persist audit state, and complete or recover.
 
-## Executable lifecycle
+An approval is not a permanent conversation-wide bypass. If the plan, action,
+arguments, or risk changes, the approval no longer matches. This prevents the
+common failure mode where approval of the first implementation plan silently
+authorizes unrelated later work.
 
-`config/lifecycle.yaml` defines bounded model turns, tool calls, retries, run duration, and an
-optional hard tool timeout. The managed runtime persists this state machine:
+## Configuration map
+
+| File | Responsibility |
+| --- | --- |
+| `agent/AGENT.md` | Canonical agent contract and instruction precedence |
+| `config/persona.yaml` | Identity, role, goal, tone, and language |
+| `config/deployment.yaml` | Host, documentation provider, and runtime adapter |
+| `config/tools.yaml` | Available tool definitions |
+| `config/guardrails.yaml` | Risk and execution constraints |
+| `config/approvals.yaml` | Approval policy and trusted approver patterns |
+| `config/planning.yaml` | Planning triggers and revision rules |
+| `config/lifecycle.yaml` | State-machine and recovery policy |
+| `config/capabilities.yaml` | Capability registry, attestations, and history |
+
+Configuration is the authority. Provider prompts and host entry points should point
+to the contract rather than duplicate it.
+
+## Capabilities and extensions
+
+Create a governed extension scaffold:
+
+```bash
+uv run python scripts/create_extension.py \
+  --type skill \
+  --id summarize-evidence \
+  --name "Summarize Evidence"
+```
+
+The scaffold begins inactive and includes a failing evaluation stub. After the
+implementation and evaluation are ready, manage its lifecycle explicitly:
+
+```bash
+uv run python scripts/manage_capability.py test summarize-evidence \
+  --actor human:reviewer
+uv run python scripts/manage_capability.py activate summarize-evidence \
+  --actor human:reviewer --approval-id review-123
+uv run python scripts/manage_capability.py verify summarize-evidence
+```
+
+Artifact, definition, and evaluation digests make unreviewed drift visible. See
+`templates/skill/` and `templates/mcp/` for the supported extension shapes.
+
+## Security model
+
+The harness enforces application-level policy at a central execution boundary.
+That materially reduces accidental overreach, but it is not a security sandbox.
+Production deployments should also isolate credentials, minimize filesystem and
+network permissions, validate tool inputs, and treat retrieved content as untrusted.
+
+Never commit `.env` files, private keys, access tokens, credential exports, or local
+runtime state. The repository ignores common sensitive artifacts, and CI runs with
+read-only repository permissions. Report vulnerabilities privately as described in
+[SECURITY.md](SECURITY.md).
+
+## Testing and validation
+
+```bash
+uv run python scripts/validate_repository.py
+uv run python -m unittest discover -s tests -v
+uv run ruff check .
+git diff --check
+```
+
+The suite covers configuration schemas, planning, approvals, guardrails, lifecycle
+recovery, runtime boundaries, capability governance, initializer profiles, and
+generated-repository validation.
+
+## Repository layout
 
 ```text
-created → inspecting → ready → awaiting_approval → executing → validating → completed
+agent/       canonical contract and policy documents
+config/      declarative persona, deployment, tools, and governance
+harness/     provider-neutral enforcement and lifecycle code
+scripts/     initialization, validation, and capability management
+skills/      governed capability implementations
+templates/   generated README and extension scaffolds
+tests/       behavioral and repository tests
 ```
 
-`failed`, `cancelled`, and `blocked` are terminal alternatives. Execution may return to
-`ready` for another bounded call, and validation may return to `ready` when more work is
-required. Illegal transitions fail closed. Completion requires at least one passing
-validation-evidence record and no failed evidence in the current validation round. Earlier
-failed rounds remain in the durable history and can be superseded after remediation.
+## Versions and Git workflow
 
-State is written atomically under the ignored `runtime/state/` directory, which is created
-only when a run starts. Each update uses an optimistic revision and an operating-system lock;
-files and directories use owner-only permissions. Exact approvals are persisted separately
-under the same trusted state directory and remain single-use after restart. Raw arguments
-whose keys match configured secret-redaction keys are blocked before persistence; handlers
-should receive secret-manager or environment-variable references instead of secret values.
+Releases follow [Semantic Versioning](https://semver.org/) and use annotated tags
+such as `v0.1.0`. Before 1.0, breaking changes increment the minor version. Changes
+are recorded in [CHANGELOG.md](CHANGELOG.md).
 
-An interrupted approval pause can resume its exact persisted call. An interruption during
-execution becomes `blocked`, because its side effects are ambiguous. Partial results persist
-their reported side effects and also become `blocked`. Idempotency keys are derived from the
-run, trusted tool identity, and normalized arguments; duplicate, successful, partial,
-timed-out, or still-running keys are never executed again. Explicit retries are bounded and
-the managed runtime permits automatic retry only for trusted read-only calls.
+For contributions, fork the repository, branch from `main`, make focused commits,
+run the full validation suite, and open a pull request. CI and Dependabot do not
+grant direct write access: only explicitly authorized collaborators can push, and a
+GitHub branch ruleset can require even those collaborators to use pull requests.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow.
 
-Run deadlines are always enforced before managed actions. Hard tool timeouts are enabled only
-for adapters that can actually stop execution. The in-process reference adapter declares that
-it cannot do so, and configuration requesting a hard tool timeout with that adapter is
-rejected rather than pretending cancellation occurred.
+Recommended maintainer release flow:
 
-The host orchestration layer must call `record_model_turn` for every model turn and use the
-managed runtime for every tool call. Bypassing that API is outside the trusted runtime
-contract and cannot claim lifecycle enforcement.
+1. Update `CHANGELOG.md` and the package version.
+2. Merge a reviewed release pull request with green CI.
+3. Create an annotated `vX.Y.Z` tag on the release commit.
+4. Publish GitHub release notes from the changelog.
+5. Keep `main` protected against force-pushes and deletions after initial publication.
 
-### Bounded implementation plans
+## Roadmap
 
-Read-only inspection can proceed without a plan. Before any state-changing tool call, the
-managed runtime requires an approved plan revision containing that exact normalized tool and
-argument digest. Each planned action is usable once. Revising the summary or action manifest
-creates a new digest, supersedes the previous revision, and removes its authority.
+- Implement and validate provider SDK runtime adapters behind the existing boundary.
+- Expand behavioral and adversarial evaluations for approvals and recovery.
+- Add optional generated CI and deployment profiles without bloating the minimal core.
+- Stabilize public interfaces toward a 1.0 release.
 
-Plan approval is bound to the run ID, revision, and plan digest and is consumed once when the
-revision becomes approved. It does not approve the conversation, future runs, revised plans,
-or tool calls outside the manifest. Terminal runs never reopen, so a later request must start
-a new run and obtain its own plan approval. The host-only `approve_plan` method must not be
-exposed as a model-callable tool. Destructive and external calls still require their separate
-exact Phase 3 tool approval even when they appear in an approved plan.
+## Project status
 
-## Canonical configuration
+This is a focused foundation, not a hosted agent service. It does not provide a UI,
+credential broker, OS sandbox, or production provider adapter. Those concerns remain
+deployment responsibilities or future extensions.
 
-- `agent/AGENT.md` is the always-loaded behavioral contract.
-- `config/persona.yaml` is the only persona source.
-- `config/policies.yaml` is the only authorization-policy source.
-- `config/capabilities.yaml` is the only activation source.
-- `config/deployment.yaml` records host, documentation, and runtime selections.
-- `config/lifecycle.yaml` is the only lifecycle-limit and state-location source.
-- `config/tools.yaml` is the only trusted tool-policy source and grants nothing when empty.
-- `config/schemas/capability.schema.json` is enforced by repository validation.
-- `config/schemas/deployment.schema.json` enforces compatible deployment combinations.
-- Runtime, lifecycle, policy, tool, state, plan, and approval schemas are also enforced by repository validation.
+## License
 
-Every capability is bound to the digest of its artifact. Tested capabilities require passing
-evidence for the exact artifact and evaluation-suite digests. Active capabilities additionally
-require a human approval bound to the exact version and both digests. Dependencies declare a
-minimum version, cycles are rejected, and active capabilities must match the selected host and
-runtime adapter.
-
-The enforced lifecycle is `proposed → tested → active → deprecated → removal`. `disabled` is
-an emergency side state that remembers its source status and rechecks evidence, dependencies,
-and compatibility before restoring active authority. Behavior or contract changes require a
-higher semantic version and reset the capability to `proposed`; silent artifact drift fails
-repository validation.
-
-## Create an extension
-
-```bash
-python3 scripts/create_extension.py --type skill --id summarize-evidence --name "Summarize Evidence"
-python3 scripts/create_extension.py --type workflow --id weekly-review --name "Weekly Review"
-python3 scripts/create_extension.py --type runbook --id restore-service --name "Restore Service"
-```
-
-Skills and workflows are registered as proposed capabilities. Runbooks are human-operable documents and are not capabilities.
-
-Promote a capability through the lifecycle with the host-operated manager:
-
-```bash
-python3 scripts/manage_capability.py bump summarize-evidence --version 0.2.0 --actor human:reviewer
-python3 scripts/manage_capability.py test summarize-evidence --actor human:reviewer
-```
-
-The scaffolder creates a deliberately failing evaluation placeholder. Implement the capability
-and its behavioral evaluation, then bump the version before testing. `test` runs the declared
-evaluation before recording evidence. Activation is available only through the host-owned
-`CapabilityLifecycle.activate` approval path and must never be exposed as a model-callable tool
-or shell command. Deprecation and removal fail
-while dependents remain; removal deletes only the registry entry and deliberately leaves the
-artifact for an explicit, separately reviewed filesystem change.
-
-## Optional examples
-
-The source template includes `examples/mcp/` and `examples/runbooks/`. They are references only and are never copied by the initializer. Adopt them deliberately when a generated agent has a demonstrated need.
-
-## Design rules
-
-1. Keep one authoritative source for each setting.
-2. Load only task-relevant skills and references.
-3. Keep secrets out of persistent state and generated runtime data outside version control.
-4. Keep optional integrations disabled until a runtime can enforce their permissions.
-5. Validate every machine-consumed contract.
-6. Require human review before promoting proposed capabilities.
+Licensed under the [Apache License 2.0](LICENSE).
