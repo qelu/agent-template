@@ -184,6 +184,32 @@ class InitializerTests(unittest.TestCase):
                 env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
             )
             self.assertEqual(generated_tests.returncode, 0, generated_tests.stderr)
+            demo_workspace = destination / "runtime" / "reference-demo"
+            demonstration = subprocess.run(
+                [
+                    sys.executable,
+                    str(destination / "scripts" / "run_reference.py"),
+                    "--yes",
+                    "--workspace",
+                    str(demo_workspace),
+                    "--message",
+                    "Generated harness reference flow.",
+                ],
+                cwd=destination,
+                capture_output=True,
+                text=True,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+            self.assertEqual(demonstration.returncode, 0, demonstration.stderr)
+            self.assertIn('"status": "completed"', demonstration.stdout)
+            self.assertEqual(
+                (demo_workspace / "output" / "welcome.txt").read_text(encoding="utf-8"),
+                "Generated harness reference flow.\n",
+            )
+            tools = yaml.safe_load(
+                (destination / "config" / "tools.yaml").read_text(encoding="utf-8")
+            )
+            self.assertEqual(tools, {"version": "1.0", "tools": []})
 
     def test_rejects_mcp_for_portable_host_and_unimplemented_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

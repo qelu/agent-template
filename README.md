@@ -132,6 +132,48 @@ arguments, or risk changes, the approval no longer matches. This prevents the
 common failure mode where approval of the first implementation plan silently
 authorizes unrelated later work.
 
+## Run the complete reference flow
+
+The reference runner demonstrates the entire governed lifecycle without a model
+provider, API key, network call, or active tool in the canonical registry:
+
+```bash
+uv run python scripts/run_reference.py
+```
+
+It creates the new isolated workspace `runtime/reference-demo`, defines one exact
+plan, requests plan approval, requests separate approval for a local file write,
+executes through the reference adapter, validates the output, and persists the
+completed audit state. It never overwrites an existing workspace and does not
+change `config/deployment.yaml` or `config/tools.yaml`.
+
+For a deterministic non-interactive smoke test, choose a fresh workspace:
+
+```bash
+uv run python scripts/run_reference.py \
+  --yes \
+  --workspace runtime/reference-demo-ci \
+  --message "Validate the governed reference path."
+```
+
+## Test a runtime adapter contract
+
+`harness/adapter_conformance.py` provides one reusable behavioral suite for every
+runtime adapter. A provider adapter supplies a fresh `AdapterConformanceFixture`
+backed by a fake provider client and inherits the same tests:
+
+```python
+class ProviderAdapterTests(RuntimeAdapterConformanceMixin, unittest.TestCase):
+    def make_adapter_fixture(self) -> AdapterConformanceFixture:
+        return fixture_for_fake_provider_client()
+```
+
+The suite verifies adapter-owned identity, immutable argument snapshots, unique
+run and call IDs, schema-valid correlated results, exact pause/resume behavior,
+single dispatch, tamper rejection, normalized failures and partial effects, strict
+JSON arguments, and honest hard-timeout claims. The reference adapter is the
+checked-in example in `tests/test_adapter_conformance.py`.
+
 ## Configuration map
 
 | File | Responsibility |
@@ -196,8 +238,8 @@ git diff --check
 ```
 
 The suite covers configuration schemas, planning, approvals, guardrails, lifecycle
-recovery, runtime boundaries, capability governance, initializer profiles, and
-generated-repository validation.
+recovery, runtime boundaries and adapter conformance, the complete reference run,
+capability governance, initializer profiles, and generated-repository validation.
 
 ## Repository layout
 
