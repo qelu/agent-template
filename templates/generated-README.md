@@ -14,15 +14,22 @@ uv run python scripts/validate_repository.py
 uv run python -m unittest discover -s tests -v
 ```
 
+This project was generated transactionally by the Agent Harness Initializer.
+The resolved choices are recorded in `.agent-harness/installation.yaml`. A
+`validation: passed` receipt means the initializer provisioned the environment
+and completed repository validation, tests, and selected quality/security checks
+before publishing this folder.
+
 The canonical agent contract is `agent/AGENT.md`. Deployment choices live in
 `config/deployment.yaml`; tools, guardrails, approvals, lifecycle policy, and
 capabilities live under `config/`.
 
 ## Runtime
 
-The default runtime adapter is intentionally disabled. Initialize with
-`--runtime reference` to use the deterministic reference boundary, or implement
-a provider adapter behind the same governed interface.
+`runtime.adapter: none` means the selected host owns the model loop; it does not
+mean the host agent is disabled. `reference` enables the deterministic local
+runtime boundary. Provider SDK runtimes require a separately implemented and
+conformance-tested adapter.
 
 Run a complete isolated plan, approval, tool, validation, and lifecycle example:
 

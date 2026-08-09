@@ -64,7 +64,9 @@ are named future adapter targets and are deliberately rejected until implemented
 
 ## Quick start
 
-Prerequisites: Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
+Bootstrap prerequisites: Git and [uv](https://docs.astral.sh/uv/). `uv` obtains
+the selected Python version and creates project-local environments; the
+initializer never modifies the system Python.
 
 ```bash
 git clone https://github.com/qelu/agent-template.git
@@ -74,7 +76,28 @@ uv run python scripts/validate_repository.py
 uv run python -m unittest discover -s tests -v
 ```
 
-Create a minimal portable agent outside this repository:
+Launch the keyboard-driven terminal initializer:
+
+```bash
+uv run python scripts/initialize_agent.py
+```
+
+The wizard collects the destination, identity, host, runtime, documentation
+integration, capabilities, Python version, development tools, and security
+checks. Required safety capabilities are locked. Optional skills, hooks,
+runbooks, workflows, validators, and MCP servers are grouped automatically from
+the governed capability registry.
+
+Before changing anything, the wizard displays the resolved installation plan,
+including every external command. Project dependencies are installed into the
+generated `.venv`; a missing host CLI or Gitleaks is installed globally only
+when the user explicitly selects and approves that action. Generation occurs in
+a temporary sibling directory, and the requested destination is published only
+after provisioning and validation succeed. Provider authentication remains in
+the provider's official first-launch/login flow, and credentials are never
+written by the initializer.
+
+For CI or repeatable automation, supply the same choices as flags:
 
 ```bash
 uv run python scripts/initialize_agent.py \
@@ -84,12 +107,27 @@ uv run python scripts/initialize_agent.py \
   --goal "Produce cited research within an approved scope." \
   --role "research assistant" \
   --tone "clear and evidence-led" \
-  --runtime reference
+  --host claude-code \
+  --runtime none \
+  --capability evidence-gathering \
+  --install
 ```
 
-The initializer refuses to overwrite an existing destination. It copies only the
-minimal governed core, generates a project-specific README, replaces identity
-placeholders, records deployment choices, and refreshes capability attestations.
+Use `--dry-run` to print the complete plan without changing anything. Repeat
+`--capability` to include optional capabilities; task planning and safe tool use
+are always included. If the flag is omitted, all packaged capabilities are
+retained for backward compatibility. External global installation commands also
+require `--yes` in non-interactive mode.
+
+The initializer refuses to overwrite an existing destination. It copies the
+minimal governed core and lockfile, generates a project-specific README,
+replaces identity placeholders, records deployment choices in
+`.agent-harness/installation.yaml`, refreshes capability attestations, and
+validates the generated harness.
+
+See the [complete terminal initializer guide](docs/initializer.md) for field
+definitions, keyboard controls, host/runtime semantics, installation scope,
+receipts, failure behavior, and every automation flag.
 
 ## Choose a host and documentation provider
 

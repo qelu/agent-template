@@ -7,6 +7,14 @@ the project follows Semantic Versioning.
 
 ### Added
 
+- A terminal initializer with ASCII branding, host/runtime selection, locked
+  core guardrails, optional capability selection, environment preflight, dry
+  runs, explicit external-command approval, and installation receipts.
+- Reusable initialization specification, resolution, transactional generation,
+  provisioning, and validation layers with locked dependency propagation.
+- Complete operator documentation for wizard controls, Agent IDs, host/runtime
+  semantics, capability selection, installation scope, receipts, rollback, and
+  non-interactive flags.
 - Structured bug and feature issue forms plus community conduct guidance.
 - A reusable runtime-adapter conformance suite.
 - An isolated end-to-end reference runner covering plans, approvals, execution,
