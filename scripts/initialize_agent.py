@@ -19,7 +19,6 @@ from harness.initializer import (  # noqa: E402
     DEFAULT_DOCUMENTATION_PROVIDER,
     DOCUMENTATION_PROVIDERS,
     HOSTS,
-    RUNTIME_ADAPTERS,
     InitializationSpec,
     InstallationPlan,
     InitializerError,
@@ -43,11 +42,7 @@ HOST_LABELS = {
     "portable": "Portable — no host-specific entry point",
     "codex": "Codex",
     "claude-code": "Claude Code",
-    "gemini-cli": "Gemini CLI",
-}
-RUNTIME_LABELS = {
-    "none": "Host-managed — recommended",
-    "reference": "Reference — deterministic local validation",
+    "antigravity": "Antigravity CLI / Gemini CLI",
 }
 
 
@@ -61,9 +56,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--role")
     result.add_argument("--tone")
     result.add_argument("--language", default="en-US")
-    result.add_argument("--host", choices=HOSTS, default="portable")
+    result.add_argument("--host", choices=(*HOSTS, "gemini-cli"), default="portable")
     result.add_argument("--docs-provider", choices=DOCUMENTATION_PROVIDERS)
-    result.add_argument("--runtime", choices=RUNTIME_ADAPTERS, default="none")
     result.add_argument(
         "--capability",
         action="append",
@@ -114,7 +108,6 @@ def cli_spec(args: argparse.Namespace) -> InitializationSpec:
         language=args.language,
         host=args.host,
         documentation_provider=args.docs_provider,
-        runtime_adapter=args.runtime,
         capabilities=None if args.capabilities is None else tuple(args.capabilities),
         python_version=args.python_version,
         install_dependencies=args.install,
@@ -165,25 +158,15 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
             default=docs_default,
         )
     )
-    runtime = _ask(
-        questionary.select(
-            "Runtime",
-            choices=[Choice(label, value=value) for value, label in RUNTIME_LABELS.items()],
-            default=defaults["runtime"],
-        )
-    )
-
     choices = capability_choices(source)
     required_choices = [choice for choice in choices if choice.required]
     optional_choices = [choice for choice in choices if not choice.required]
     incompatible_required = [
-        choice.capability_id
-        for choice in required_choices
-        if host not in choice.hosts or runtime not in choice.runtime_adapters
+        choice.capability_id for choice in required_choices if host not in choice.hosts
     ]
     if incompatible_required:
         raise InitializerError(
-            "Required capabilities are incompatible with this host/runtime: "
+            "Required capabilities are incompatible with this host: "
             + ", ".join(incompatible_required)
         )
     console.print("\nRequired capabilities", style="bold cyan")
@@ -202,10 +185,8 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
                         Choice(
                             f"{choice.capability_id} — {choice.description}",
                             value=choice.capability_id,
-                            checked=host in choice.hosts and runtime in choice.runtime_adapters,
-                            disabled=None
-                            if host in choice.hosts and runtime in choice.runtime_adapters
-                            else "incompatible",
+                            checked=host in choice.hosts,
+                            disabled=None if host in choice.hosts else "incompatible",
                         )
                         for choice in typed_choices
                     ],
@@ -229,15 +210,22 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
         questionary.confirm("Run Gitleaks validation?", default=defaults["security_tools"])
     )
     install_host_tool = False
-    host_binary = {"codex": "codex", "claude-code": "claude", "gemini-cli": "gemini"}.get(host)
+    host_binary = {"codex": "codex", "claude-code": "claude", "antigravity": "agy"}.get(host)
     if host_binary:
         if not shutil.which(host_binary):
-            install_host_tool = _ask(
-                questionary.confirm(
-                    f"{host_binary} is not installed. Include its official global installation?",
-                    default=False,
+            if host == "antigravity":
+                console.print(
+                    "Antigravity CLI (`agy`) is not installed. Use Google's official installer "
+                    "before running the generated harness.",
+                    style="yellow",
                 )
-            )
+            else:
+                install_host_tool = _ask(
+                    questionary.confirm(
+                        f"{host_binary} is not installed. Include its official global installation?",
+                        default=False,
+                    )
+                )
     return InitializationSpec(
         destination=Path(destination),
         name=name,
@@ -248,7 +236,6 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
         language=language,
         host=host,
         documentation_provider=documentation_provider,
-        runtime_adapter=runtime,
         capabilities=selected,
         python_version=python_version,
         install_dependencies=install_dependencies,
@@ -271,9 +258,8 @@ def plan_payload(plan: InstallationPlan) -> dict[str, object]:
     return {
         "destination": str(plan.spec.destination),
         "host": plan.spec.host,
-        "runtime": "host-managed"
-        if plan.spec.runtime_adapter == "none"
-        else plan.spec.runtime_adapter,
+        "execution": "host-native",
+        "run_identity": "host-session",
         "documentation_provider": plan.documentation_provider,
         "capabilities": list(plan.capabilities),
         "environment": {

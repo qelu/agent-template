@@ -35,27 +35,13 @@
     },
     "compatibility": {
       "type": "object",
-      "required": ["hosts", "runtime_adapters"],
+      "required": ["hosts"],
       "properties": {
         "hosts": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": {"enum": ["portable", "codex", "claude-code", "gemini-cli"]}
-        },
-        "runtime_adapters": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "enum": [
-              "none",
-              "reference",
-              "openai-agents",
-              "claude-agent-sdk",
-              "google-adk"
-            ]
-          }
+          "items": {"enum": ["portable", "codex", "claude-code", "antigravity"]}
         }
       },
       "additionalProperties": false

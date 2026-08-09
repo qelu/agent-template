@@ -14,9 +14,7 @@ class PolicyTests(unittest.TestCase):
         }
 
     def test_reads_only_trusted_authorization_configuration(self) -> None:
-        self.assertEqual(
-            authorization_requirement(self.policy, "read_only"), "autonomous"
-        )
+        self.assertEqual(authorization_requirement(self.policy, "read_only"), "autonomous")
         self.assertEqual(
             authorization_requirement(self.policy, "destructive_change"),
             "explicit_approval",

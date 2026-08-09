@@ -43,7 +43,6 @@ class RegistryTests(unittest.TestCase):
         (self.root / "config" / "schemas" / "capability.schema.json").write_text(
             json.dumps(schema), encoding="utf-8"
         )
-        self.write_deployment()
         self.capability = proposed_capability(
             self.root,
             capability_id="sample",
@@ -54,12 +53,6 @@ class RegistryTests(unittest.TestCase):
             risk_level="low",
             owner="test-owner",
             actor="human:test",
-        )
-
-    def write_deployment(self, host: str = "portable", adapter: str = "none") -> None:
-        (self.root / "config" / "deployment.yaml").write_text(
-            yaml.safe_dump({"host": host, "runtime": {"adapter": adapter}}),
-            encoding="utf-8",
         )
 
     def write_registry(self, capabilities: list[dict[str, object]]) -> None:
@@ -197,7 +190,9 @@ class RegistryTests(unittest.TestCase):
         self.assertIsNone(reset["evaluation"])
         self.assertIsNone(reset["activation"])
 
-    def test_activation_requires_compatibility_and_deprecation_has_dependency_guard(self) -> None:
+    def test_activation_preserves_host_compatibility_and_deprecation_has_dependency_guard(
+        self,
+    ) -> None:
         active = self.active()
         dependent = copy.deepcopy(active)
         dependent["id"] = "dependent"
@@ -215,8 +210,9 @@ class RegistryTests(unittest.TestCase):
         self.write_registry([proposed])
         manager = self.manager()
         manager.record_passing_evaluation("sample", "evaluator")
-        with self.assertRaisesRegex(CapabilityError, "incompatible with the configured host"):
-            manager.activate("sample", "human:test")
+        manager.activate("sample", "human:test")
+        activated = load_capabilities(self.root)[0]
+        self.assertEqual(activated["compatibility"]["hosts"], ["codex"])
 
     def test_emergency_disable_cascades_to_active_dependents(self) -> None:
         active = self.active()

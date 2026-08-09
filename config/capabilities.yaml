@@ -5,19 +5,18 @@ capabilities:
     version: "1.0.0"
     status: active
     path: skills/task-planning
-    artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230
-    definition_digest: ceb8817f4b4b7633927bd90985c58156862601f7bd53be53a3739cc029193554
+    artifact_digest: 2cf173c2a2beedd1414ef5d3eac9ec16d23af9d65512eaa7ccfc63b75c52fef9
+    definition_digest: e891fddd16c806f8e701b176e3d5a85352b8e606acc5a0d3c05ffaa266ed281f
     description: Plan bounded work with explicit scope, risk, validation, and rollback.
     risk_level: low
     owner: human
     requires: []
     compatibility: &portable_compatibility
-      hosts: [portable, codex, claude-code, gemini-cli]
-      runtime_adapters: [none, reference, openai-agents, claude-agent-sdk, google-adk]
+      hosts: [portable, codex, claude-code, antigravity]
     evaluation_suite: tests/test_skills.py
     evaluation: &skill_evaluation
       suite_digest: 8bc21fc2828864153b3e3c75ed0bc204e17460da33b55c575f6763d1f23a8b87
-      artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230
+      artifact_digest: 2cf173c2a2beedd1414ef5d3eac9ec16d23af9d65512eaa7ccfc63b75c52fef9
       passed_at: "2026-08-08T00:00:00Z"
       recorded_by: human:phase-5-migration
     activation: &task_planning_activation
@@ -25,14 +24,14 @@ capabilities:
       approved_by: human:phase-5-migration
       approved_at: "2026-08-08T00:00:00Z"
       version: "1.0.0"
-      artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230
-      definition_digest: ceb8817f4b4b7633927bd90985c58156862601f7bd53be53a3739cc029193554
+      artifact_digest: 2cf173c2a2beedd1414ef5d3eac9ec16d23af9d65512eaa7ccfc63b75c52fef9
+      definition_digest: e891fddd16c806f8e701b176e3d5a85352b8e606acc5a0d3c05ffaa266ed281f
       suite_digest: 8bc21fc2828864153b3e3c75ed0bc204e17460da33b55c575f6763d1f23a8b87
     disabled_from: null
     history:
-      - {from: null, to: proposed, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing capability imported", version: "1.0.0", artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230}
-      - {from: proposed, to: tested, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing evaluation recorded", version: "1.0.0", artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230}
-      - {from: tested, to: active, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing activation recorded", version: "1.0.0", artifact_digest: b6e2e60a08b9be6d410aea9689cf064519f20d33d158c0ab406dcddfc492b230}
+      - {from: null, to: proposed, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing capability imported", version: "1.0.0", artifact_digest: 2cf173c2a2beedd1414ef5d3eac9ec16d23af9d65512eaa7ccfc63b75c52fef9}
+      - {from: proposed, to: tested, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing evaluation recorded", version: "1.0.0", artifact_digest: 2cf173c2a2beedd1414ef5d3eac9ec16d23af9d65512eaa7ccfc63b75c52fef9}
+      - {from: tested, to: active, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing activation recorded", version: "1.0.0", artifact_digest: 2cf173c2a2beedd1414ef5d3eac9ec16d23af9d65512eaa7ccfc63b75c52fef9}
 
   - id: evidence-gathering
     type: skill
@@ -40,7 +39,7 @@ capabilities:
     status: active
     path: skills/evidence-gathering
     artifact_digest: 976417986b5899171d0413b7e62d7e6bd4e7e30c935812023ad88cb12dc52f0b
-    definition_digest: 18b0219adff8c961f955bd771a2be5aaee375902a6bf53205c06f675552f3631
+    definition_digest: 97ff768993021d78543f2642a37e60f28e0a65c88bacc2a0a63d1d6dfbe4b4c8
     description: Verify material claims using direct observation and primary evidence.
     risk_level: low
     owner: human
@@ -54,7 +53,7 @@ capabilities:
       <<: *task_planning_activation
       approval_id: phase-5-migration-evidence-gathering
       artifact_digest: 976417986b5899171d0413b7e62d7e6bd4e7e30c935812023ad88cb12dc52f0b
-      definition_digest: 18b0219adff8c961f955bd771a2be5aaee375902a6bf53205c06f675552f3631
+      definition_digest: 97ff768993021d78543f2642a37e60f28e0a65c88bacc2a0a63d1d6dfbe4b4c8
     disabled_from: null
     history:
       - {from: null, to: proposed, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing capability imported", version: "1.0.0", artifact_digest: 976417986b5899171d0413b7e62d7e6bd4e7e30c935812023ad88cb12dc52f0b}
@@ -67,7 +66,7 @@ capabilities:
     status: active
     path: skills/safe-tool-use
     artifact_digest: 46d91bf32a1ec66de7c5e021d3f094d04ee4e2633616702f19fdaa0b5bcfebd4
-    definition_digest: b43bc43ce0fa17c5aea3f9bfba347ee63137cf14fbe785ec29dd354c6269af30
+    definition_digest: 6039cd0fad75075d65b8d336c45729b72b7ae83480a25155a23b142107968195
     description: Apply tools within scope, least privilege, and approval boundaries.
     risk_level: medium
     owner: human
@@ -81,7 +80,7 @@ capabilities:
       <<: *task_planning_activation
       approval_id: phase-5-migration-safe-tool-use
       artifact_digest: 46d91bf32a1ec66de7c5e021d3f094d04ee4e2633616702f19fdaa0b5bcfebd4
-      definition_digest: b43bc43ce0fa17c5aea3f9bfba347ee63137cf14fbe785ec29dd354c6269af30
+      definition_digest: 6039cd0fad75075d65b8d336c45729b72b7ae83480a25155a23b142107968195
     disabled_from: null
     history:
       - {from: null, to: proposed, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing capability imported", version: "1.0.0", artifact_digest: 46d91bf32a1ec66de7c5e021d3f094d04ee4e2633616702f19fdaa0b5bcfebd4}
@@ -94,7 +93,7 @@ capabilities:
     status: active
     path: skills/documentation-maintenance
     artifact_digest: 5d1e9a6398a24c089cabba210b082434bc734cc7f043f39cf5a82f95b7d713ad
-    definition_digest: 12406bc4242f710a2486fa8eb0f9943cd50f2098e40963ef156df2622496f99b
+    definition_digest: 1855f18865ab1c65f87029c6f60125745443e6cab9fb6e70669c27c6241e242c
     description: Maintain durable decisions and operational documentation without duplication.
     risk_level: low
     owner: human
@@ -108,7 +107,7 @@ capabilities:
       <<: *task_planning_activation
       approval_id: phase-5-migration-documentation-maintenance
       artifact_digest: 5d1e9a6398a24c089cabba210b082434bc734cc7f043f39cf5a82f95b7d713ad
-      definition_digest: 12406bc4242f710a2486fa8eb0f9943cd50f2098e40963ef156df2622496f99b
+      definition_digest: 1855f18865ab1c65f87029c6f60125745443e6cab9fb6e70669c27c6241e242c
     disabled_from: null
     history:
       - {from: null, to: proposed, at: "2026-08-08T00:00:00Z", actor: "human:phase-5-migration", reason: "Existing capability imported", version: "1.0.0", artifact_digest: 5d1e9a6398a24c089cabba210b082434bc734cc7f043f39cf5a82f95b7d713ad}

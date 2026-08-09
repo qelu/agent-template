@@ -21,9 +21,7 @@ def load_policy(root: Path) -> dict[str, Any]:
     try:
         payload = load_yaml(root / "config" / "policies.yaml")
         schema = json.loads(
-            (root / "config" / "schemas" / "policy.schema.json").read_text(
-                encoding="utf-8"
-            )
+            (root / "config" / "schemas" / "policy.schema.json").read_text(encoding="utf-8")
         )
         Draft202012Validator.check_schema(schema)
     except (OSError, ValueError, TypeError, SchemaError) as exc:

@@ -4,7 +4,6 @@ required_capabilities:
   - safe-tool-use
 defaults:
   host: claude-code
-  runtime: none
   python: "3.13"
   development_tools: true
   security_tools: false

@@ -6,8 +6,8 @@
 ## Context
 
 A status label alone cannot prevent an agent from silently activating changed behavior. The
-template also needs to remain portable across Codex, Claude Code, Gemini CLI, and supported
-runtime adapters without duplicating activation state.
+template also needs to remain portable across Codex, Claude Code, and Antigravity without
+duplicating activation state.
 
 ## Decision
 
@@ -20,9 +20,9 @@ The host-operated lifecycle manager enforces promotion, emergency disable and sa
 version reset, deprecation, and removal. Its `test` command executes the declared suite before
 recording evidence. Its activation path is trusted host functionality and is not model-callable.
 
-Active capabilities must have current evidence and approval, active compatible dependencies,
-and compatibility with the configured deployment. Any unversioned artifact or evaluation-suite
-change fails validation.
+Active capabilities must have current evidence and approval plus active compatible dependencies.
+Host compatibility is resolved by the initializer. Any unversioned artifact or evaluation-suite
+change fails source-template validation.
 
 ## Consequences
 

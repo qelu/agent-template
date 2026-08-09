@@ -16,14 +16,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from harness.configuration import load_yaml
 
-HOSTS = ("portable", "codex", "claude-code", "gemini-cli")
-RUNTIME_ADAPTERS = (
-    "none",
-    "reference",
-    "openai-agents",
-    "claude-agent-sdk",
-    "google-adk",
-)
+HOSTS = ("portable", "codex", "claude-code", "antigravity")
 LEGAL_TRANSITIONS = {
     "proposed": {"tested", "disabled"},
     "tested": {"active", "disabled"},
@@ -118,7 +111,6 @@ def load_capabilities(root: Path) -> list[dict[str, Any]]:
 
     _validate_dependencies(capabilities, by_id)
     _validate_cycles(by_id)
-    _validate_deployment(root, capabilities)
     return capabilities
 
 
@@ -162,7 +154,6 @@ class CapabilityLifecycle:
         if capability["status"] != "tested" or capability["evaluation"] is None:
             raise CapabilityError("Activation requires a tested capability")
         self._require_dependencies_active(payload, capability)
-        self._require_compatible(capability)
         actor = _required(approved_by, "human approver")
         capability["activation"] = {
             "approval_id": _required(self._id_factory(), "approval ID"),
@@ -211,7 +202,6 @@ class CapabilityLifecycle:
             raise CapabilityError("Capability has no disabled state to restore")
         if target == "active":
             self._require_dependencies_active(payload, capability)
-            self._require_compatible(capability)
             _validate_evidence(
                 capability, _contained_path(self.root, capability["evaluation_suite"])
             )
@@ -308,13 +298,6 @@ class CapabilityLifecycle:
                     f"Dependency is not active and compatible: {requirement['id']}"
                 )
 
-    def _require_compatible(self, capability: dict[str, Any]) -> None:
-        deployment = load_yaml(self.root / "config" / "deployment.yaml")
-        if deployment["host"] not in capability["compatibility"]["hosts"]:
-            raise CapabilityError("Capability is incompatible with the configured host")
-        if deployment["runtime"]["adapter"] not in capability["compatibility"]["runtime_adapters"]:
-            raise CapabilityError("Capability is incompatible with the configured runtime")
-
     def _save(self, payload: dict[str, Any]) -> None:
         path = self.root / "config" / "capabilities.yaml"
         serialized = yaml.safe_dump(payload, sort_keys=False)
@@ -343,7 +326,6 @@ def proposed_capability(
     actor: str,
     evaluation_suite: str | None = None,
     hosts: list[str] | None = None,
-    runtime_adapters: list[str] | None = None,
 ) -> dict[str, Any]:
     digest = artifact_digest(_contained_path(root, path))
     now = _utc_now()
@@ -361,7 +343,6 @@ def proposed_capability(
         "requires": [],
         "compatibility": {
             "hosts": hosts or list(HOSTS),
-            "runtime_adapters": runtime_adapters or list(RUNTIME_ADAPTERS),
         },
         "evaluation_suite": evaluation_suite,
         "evaluation": None,
@@ -397,7 +378,6 @@ def attested_active_capability(
     approved_by: str,
     approval_id: str,
     hosts: list[str] | None = None,
-    runtime_adapters: list[str] | None = None,
 ) -> dict[str, Any]:
     """Create an initializer-owned active record from explicit user configuration."""
     capability = proposed_capability(
@@ -412,7 +392,6 @@ def attested_active_capability(
         actor=approved_by,
         evaluation_suite=evaluation_suite,
         hosts=hosts,
-        runtime_adapters=runtime_adapters,
     )
     now = _utc_now()
     suite_digest = file_digest(_contained_path(root, evaluation_suite))
@@ -583,24 +562,6 @@ def _validate_cycles(by_id: dict[str, dict[str, Any]]) -> None:
 
     for capability_id in by_id:
         visit(capability_id)
-
-
-def _validate_deployment(root: Path, capabilities: list[dict[str, Any]]) -> None:
-    deployment_path = root / "config" / "deployment.yaml"
-    if not deployment_path.exists():
-        return
-    deployment = load_yaml(deployment_path)
-    host = deployment["host"]
-    adapter = deployment["runtime"]["adapter"]
-    for capability in capabilities:
-        if capability["status"] != "active":
-            continue
-        if host not in capability["compatibility"]["hosts"]:
-            raise CapabilityError(f"Active capability {capability['id']} is incompatible with host")
-        if adapter not in capability["compatibility"]["runtime_adapters"]:
-            raise CapabilityError(
-                f"Active capability {capability['id']} is incompatible with runtime"
-            )
 
 
 def _dependents(
