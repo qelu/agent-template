@@ -306,7 +306,7 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
     console = Console(no_color=no_color)
     next_steps = [f"cd {shlex.quote(str(plan.spec.destination))}"]
     if not plan.spec.install_dependencies:
-        next_steps.extend(("uv sync --extra dev", "uv run python scripts/validate_repository.py"))
+        next_steps.extend(("uv sync --extra dev", "uv run python scripts/validate_harness.py"))
     if plan.launch_command:
         if shutil.which(plan.launch_command):
             next_steps.append(f"{plan.launch_command}  # authenticate on first launch if needed")

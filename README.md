@@ -198,9 +198,11 @@ uv run python scripts/create_extension.py \
   --name "Summarize Evidence"
 ```
 
-The scaffold begins inactive with a failing evaluation. Promote it only after
-implementation, testing, and explicit activation through
-`scripts/manage_capability.py`.
+The scaffold begins inactive with a failing evaluation. Use
+`scripts/manage_capability.py test <capability-id>` after implementing its
+behavioral evaluation. Activation is intentionally absent from that CLI: bind
+`CapabilityLifecycle.activate` to a trusted human approval surface instead of
+making activation model-callable.
 
 ## Security notes
 

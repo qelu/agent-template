@@ -11,7 +11,7 @@ the project follows Semantic Versioning.
   core guardrails, optional capability selection, environment preflight, dry
   runs, explicit external-command approval, and installation receipts.
 - Reusable initialization specification, resolution, transactional generation,
-  provisioning, and validation layers with locked dependency propagation.
+  provisioning, and validation layers with a minimal generated dependency manifest.
 - Complete operator documentation for wizard controls, Agent IDs, host-native
   semantics, capability selection, installation scope, receipts, rollback, and
   non-interactive flags.

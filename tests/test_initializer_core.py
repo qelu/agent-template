@@ -223,6 +223,34 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertIn("execution: host-native", result.stdout)
             self.assertFalse(destination.exists())
 
+    def test_cli_success_recommends_generated_harness_validator(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "agent"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.root / "scripts" / "initialize_agent.py"),
+                    "--destination",
+                    str(destination),
+                    "--name",
+                    "Generated Validator",
+                    "--goal",
+                    "Validate the generated harness.",
+                    "--role",
+                    "assistant",
+                    "--tone",
+                    "concise",
+                    "--host",
+                    "portable",
+                    "--no-color",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("scripts/validate_harness.py", result.stdout)
+            self.assertNotIn("scripts/validate_repository.py", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
