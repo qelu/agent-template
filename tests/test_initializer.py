@@ -42,12 +42,16 @@ class InitializerTests(unittest.TestCase):
             project = (destination / "pyproject.toml").read_text(encoding="utf-8")
             self.assertIn('name = "sample"', project)
             self.assertNotIn("agent-template-placeholder", project)
+            lockfile = (destination / "uv.lock").read_text(encoding="utf-8")
+            self.assertIn('name = "sample"', lockfile)
+            self.assertNotIn("agent-template-placeholder", lockfile)
             readme = (destination / "README.md").read_text(encoding="utf-8")
             self.assertIn("# Sample", readme)
             self.assertNotIn("github.com/qelu/agent-template", readme)
             self.assertTrue((destination / "LICENSE").is_file())
 
             expected = {
+                ".agent-harness",
                 "agent",
                 "config",
                 "harness",
@@ -63,6 +67,7 @@ class InitializerTests(unittest.TestCase):
                 self.assertFalse((destination / excluded).exists())
             self.assertFalse((destination / "config" / "registry").exists())
             self.assertFalse((destination / "tests" / "test_initializer.py").exists())
+            self.assertFalse((destination / "tests" / "test_initializer_core.py").exists())
             deployment = yaml.safe_load(
                 (destination / "config" / "deployment.yaml").read_text(encoding="utf-8")
             )
@@ -81,6 +86,11 @@ class InitializerTests(unittest.TestCase):
             for filename in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
                 self.assertFalse((destination / filename).exists())
             self.assertEqual(list(destination.glob("skills/*/agents")), [])
+            receipt = yaml.safe_load(
+                (destination / ".agent-harness" / "installation.yaml").read_text(encoding="utf-8")
+            )
+            self.assertEqual(receipt["validation"], "pending")
+            self.assertEqual(receipt["runtime"], "host-managed")
 
             extension = subprocess.run(
                 [

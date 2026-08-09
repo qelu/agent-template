@@ -7,6 +7,9 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
+import jsonschema
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -47,12 +50,14 @@ REQUIRED = (
     "config/capabilities.yaml",
     "config/context-routes.yaml",
     "config/deployment.yaml",
+    "config/initializer.yaml",
     "config/lifecycle.yaml",
     "config/persona.yaml",
     "config/policies.yaml",
     "config/schemas/capability.schema.json",
     "config/schemas/deployment.schema.json",
     "config/schemas/lifecycle.schema.json",
+    "config/schemas/installation.schema.json",
     "config/schemas/approval.schema.json",
     "config/schemas/post-tool-event.schema.json",
     "config/schemas/policy.schema.json",
@@ -63,6 +68,7 @@ REQUIRED = (
     "config/tools.yaml",
     "harness/approvals.py",
     "harness/guarded_runtime.py",
+    "harness/initializer.py",
     "harness/guardrails.py",
     "harness/lifecycle.py",
     "harness/lifecycle_runtime.py",
@@ -131,6 +137,7 @@ def main() -> int:
     for relative in (
         "agent/config.yaml",
         "config/context-routes.yaml",
+        "config/initializer.yaml",
         "config/lifecycle.yaml",
         "config/persona.yaml",
         "config/policies.yaml",
@@ -139,6 +146,19 @@ def main() -> int:
             load_yaml(ROOT / relative)
         except ConfigurationError as exc:
             errors.append(str(exc))
+
+    receipt = ROOT / ".agent-harness" / "installation.yaml"
+    if receipt.exists():
+        try:
+            schema = yaml.safe_load(
+                (ROOT / "config" / "schemas" / "installation.schema.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            payload = yaml.safe_load(receipt.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator(schema).validate(payload)
+        except (jsonschema.ValidationError, OSError, ValueError, yaml.YAMLError) as exc:
+            errors.append(f"Invalid installation receipt: {exc}")
 
     try:
         capabilities = load_capabilities(ROOT)

@@ -112,6 +112,13 @@ class RegistryTests(unittest.TestCase):
         self.write_registry([self.active()])
         self.assertEqual(active_capabilities(self.root)[0]["status"], "active")
 
+    def test_runbook_is_a_governed_capability_type(self) -> None:
+        runbook = copy.deepcopy(self.capability)
+        runbook["type"] = "runbook"
+        self.refresh_definition(runbook)
+        self.write_registry([runbook])
+        self.assertEqual(load_capabilities(self.root)[0]["type"], "runbook")
+
     def test_schema_rejects_unknown_fields_and_parent_traversal(self) -> None:
         invalid = copy.deepcopy(self.capability)
         invalid["unexpected"] = True

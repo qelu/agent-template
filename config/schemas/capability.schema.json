@@ -133,7 +133,9 @@
           "type": "string",
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
         },
-        "type": {"enum": ["skill", "workflow", "hook", "validator", "mcp-server"]},
+        "type": {
+          "enum": ["skill", "workflow", "hook", "runbook", "validator", "mcp-server"]
+        },
         "version": {"$ref": "#/$defs/semver"},
         "status": {"$ref": "#/$defs/status"},
         "path": {
