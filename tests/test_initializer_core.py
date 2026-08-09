@@ -149,18 +149,18 @@ class InitializerCoreTests(unittest.TestCase):
     def test_provisioning_uses_uv_and_selected_validation_tools(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary)
-            plan = resolve_plan(
-                self.root,
-                self.spec(
-                    destination / "agent",
-                    install_dependencies=True,
-                    security_tools=True,
-                ),
-            )
             with (
                 patch("harness.initializer.shutil.which", return_value="/tools/uv"),
                 patch("harness.initializer._run") as run,
             ):
+                plan = resolve_plan(
+                    self.root,
+                    self.spec(
+                        destination / "agent",
+                        install_dependencies=True,
+                        security_tools=True,
+                    ),
+                )
                 provision_and_validate(destination, plan)
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(commands[0], ["/tools/uv", "sync", "--python", "3.13", "--extra", "dev"])
