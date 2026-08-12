@@ -6,12 +6,13 @@ description: Select and operate tools within configured scope, least privilege, 
 # Safe tool use
 
 1. Resolve the exact target with read-only checks.
-2. Classify the action as read-only, reversible local change, destructive change, external side effect, or permission expansion.
+2. Classify the action as read, write, delete, external side effect, or unknown.
 3. Read `config/policies.yaml` for the applicable authority boundary.
-4. Use typed, purpose-built tools before raw shell commands when available.
-5. Pass the minimum data and permissions required.
-6. Preview or dry-run risky operations when the tool supports it.
-7. Verify the intended result and check for adjacent harm.
-8. Record metadata without arguments or secret values.
+4. Never attempt an action the policy classifies as denied; approval cannot override a denial.
+5. Use typed, purpose-built tools before raw shell commands when available.
+6. Pass the minimum data and permissions required.
+7. Preview or dry-run approved risky operations when the tool supports it.
+8. Verify the intended result and check for adjacent harm.
+9. Record metadata without arguments or secret values.
 
 Fail closed when target, scope, or authorization is ambiguous and the ambiguity could cause material harm.

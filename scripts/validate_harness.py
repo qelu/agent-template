@@ -13,6 +13,10 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from scripts.guardrails.core import load_policy  # noqa: E402
+
 HOST_FILES = {
     "codex": ("AGENTS.md", ".codex/config.toml", ".codex/hooks.json"),
     "claude-code": ("CLAUDE.md", ".claude/settings.json"),
@@ -26,6 +30,8 @@ SKILL_ROOTS = {
     "portable": ".agents/skills",
 }
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
+CAPABILITY_FIELDS = {"id", "type", "status", "path", "description", "when"}
+CAPABILITY_STATUSES = {"active", "experimental", "disabled"}
 
 
 def _load_yaml(path: Path) -> dict[str, object]:
@@ -48,10 +54,8 @@ def _validate_host_guardrails(host: str, errors: list[str]) -> None:
             config = tomllib.loads((ROOT / ".codex/config.toml").read_text(encoding="utf-8"))
             if config.get("approval_policy") != "on-request":
                 errors.append("Codex approval_policy must be on-request")
-            if config.get("sandbox_mode") != "workspace-write":
-                errors.append("Codex sandbox_mode must be workspace-write")
-            if config.get("sandbox_workspace_write", {}).get("network_access") is not False:
-                errors.append("Codex workspace sandbox network access must default to false")
+            if config.get("sandbox_mode") != "read-only":
+                errors.append("Codex sandbox_mode must be read-only")
             hooks = json.loads((ROOT / ".codex/hooks.json").read_text(encoding="utf-8"))
             if not {"UserPromptSubmit", "PreToolUse"}.issubset(hooks.get("hooks", {})):
                 errors.append("Codex guardrail hooks are incomplete")
@@ -91,10 +95,9 @@ def main() -> int:
             errors.append(f"Missing required file: {relative}")
 
     try:
-        policy_text = (ROOT / "config" / "policies.yaml").read_text(encoding="utf-8")
-        json.loads(policy_text)
-    except (OSError, json.JSONDecodeError) as exc:
-        errors.append(f"config/policies.yaml must remain JSON-compatible YAML: {exc}")
+        load_policy(ROOT)
+    except (OSError, ValueError) as exc:
+        errors.append(f"Invalid portable policy: {exc}")
 
     try:
         receipt = _load_yaml(receipt_path)
@@ -123,6 +126,19 @@ def main() -> int:
             if not isinstance(capability, dict):
                 errors.append("Capability entries must be mappings")
                 continue
+            if set(capability) != CAPABILITY_FIELDS:
+                errors.append(
+                    "Capability entry has invalid fields: "
+                    + str(sorted(set(capability) ^ CAPABILITY_FIELDS))
+                )
+                continue
+            if capability["status"] not in CAPABILITY_STATUSES:
+                errors.append(f"Invalid capability status: {capability['status']}")
+            if not all(
+                isinstance(capability[field], str) and capability[field].strip()
+                for field in CAPABILITY_FIELDS
+            ):
+                errors.append(f"Capability {capability.get('id')} has empty or invalid fields")
             if capability.get("type") == "skill":
                 skill = skill_root / str(capability.get("id", "")) / "SKILL.md"
                 if not skill.is_file():

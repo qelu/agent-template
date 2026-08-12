@@ -7,8 +7,20 @@ from pathlib import Path
 
 
 POLICY = {
-    "safety": {"deny_shell_patterns": ["rm -rf /", "mkfs"]},
-    "secrets": {"denied_path_markers": [".env", ".ssh", "credentials", "secrets"]},
+    "version": "1.0",
+    "actions": {
+        "read": "allow",
+        "write": "ask",
+        "delete": "deny",
+        "external_side_effect": "ask",
+        "unknown": "ask",
+    },
+    "scope": {
+        "allowed_read_paths": ["."],
+        "allowed_write_paths": ["."],
+        "denied_paths": [".env", ".env.*", ".ssh", ".ssh/**", "secrets", "secrets/**"],
+    },
+    "shell": {"denied_patterns": ["rm -rf /", "mkfs"]},
     "audit": {"enabled": True},
 }
 
@@ -20,168 +32,142 @@ class HostGuardrailTests(unittest.TestCase):
 
     def root(self, temporary: str, policy: dict[str, object] | None = None) -> Path:
         root = Path(temporary)
-        directory = root / "config"
-        directory.mkdir()
-        (directory / "policies.yaml").write_text(json.dumps(policy or POLICY))
+        (root / "config").mkdir()
+        (root / "config" / "policies.yaml").write_text(json.dumps(policy or POLICY))
         return root
 
     def invoke(
-        self,
-        root: Path,
-        host: str,
-        payload: dict[str, object],
-        event: str | None = None,
+        self, root: Path, host: str, tool_name: str, tool_input: dict[str, object]
     ) -> subprocess.CompletedProcess[str]:
-        command = [sys.executable, str(self.scripts / f"{host}.py"), "--root", str(root)]
-        if event:
-            command.extend(("--event", event))
-        return subprocess.run(command, input=json.dumps(payload), capture_output=True, text=True)
+        if host == "antigravity":
+            payload = {
+                "toolCall": {"name": tool_name, "args": tool_input},
+                "conversationId": f"{host}-run",
+            }
+            event = ["--event", "PreToolUse"]
+        else:
+            payload = {
+                "session_id": f"{host}-run",
+                "hook_event_name": "PreToolUse",
+                "tool_name": tool_name,
+                "tool_input": tool_input,
+            }
+            event = []
+        return subprocess.run(
+            [sys.executable, str(self.scripts / f"{host}.py"), "--root", str(root), *event],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+        )
 
-    def test_codex_prompt_context_and_structured_denial(self) -> None:
+    def decision(self, result: subprocess.CompletedProcess[str], host: str) -> str:
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        if host == "antigravity":
+            return str(payload["decision"])
+        return str(payload["hookSpecificOutput"]["permissionDecision"])
+
+    def test_claude_and_antigravity_apply_allow_ask_deny_directly(self) -> None:
+        for host, read_tool, write_tool, command_key in (
+            ("claude_code", "Read", "Write", "command"),
+            ("antigravity", "view_file", "write_file", "CommandLine"),
+        ):
+            with self.subTest(host=host), tempfile.TemporaryDirectory() as temporary:
+                root = self.root(temporary)
+                read = self.invoke(root, host, read_tool, {"file_path": str(root / "a.py")})
+                write = self.invoke(root, host, write_tool, {"file_path": str(root / "a.py")})
+                delete = self.invoke(root, host, "run_command", {command_key: "rm a.py"})
+                self.assertEqual(self.decision(read, host), "allow")
+                self.assertEqual(self.decision(write, host), "ask")
+                self.assertEqual(self.decision(delete, host), "deny")
+
+    def test_codex_blocks_denials_and_defers_ask_to_native_approval(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = self.root(temporary)
-            prompt = self.invoke(
-                root,
-                "codex",
-                {
-                    "session_id": "thr_123",
-                    "turn_id": "turn_456",
-                    "hook_event_name": "UserPromptSubmit",
-                    "prompt": "Implement the feature.",
-                },
-            )
-            self.assertEqual(prompt.returncode, 0, prompt.stderr)
-            context = json.loads(prompt.stdout)["hookSpecificOutput"]["additionalContext"]
-            self.assertIn("thr_123", context)
+            deletion = self.invoke(root, "codex", "apply_patch", {"patch": "*** Delete File: a.py"})
+            self.assertEqual(self.decision(deletion, "codex"), "deny")
 
-            denial = self.invoke(
-                root,
-                "codex",
-                {
-                    "session_id": "thr_123",
-                    "hook_event_name": "PreToolUse",
-                    "tool_name": "Bash",
-                    "tool_input": {"command": "sudo rm -fr /*"},
-                },
-            )
-            decision = json.loads(denial.stdout)["hookSpecificOutput"]
-            self.assertEqual(decision["permissionDecision"], "deny")
-            self.assertNotIn("Implement the feature", self._audit(root, "thr_123"))
+            write = self.invoke(root, "codex", "apply_patch", {"patch": "*** Update File: a.py"})
+            self.assertEqual(write.returncode, 0, write.stderr)
+            self.assertEqual(write.stdout, "")
 
-    def test_claude_code_denies_sensitive_shell_reads(self) -> None:
+            outside = self.invoke(
+                root, "codex", "apply_patch", {"patch": "*** Update File: ../outside.py"}
+            )
+            self.assertEqual(self.decision(outside, "codex"), "deny")
+
+    def test_scope_is_enforced_for_read_and_write(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = self.root(temporary)
-            result = self.invoke(
+            outside = str(root.parent / "outside.txt")
+            for host, tool in (("claude_code", "Read"), ("antigravity", "view_file")):
+                with self.subTest(host=host):
+                    result = self.invoke(root, host, tool, {"file_path": outside})
+                    self.assertEqual(self.decision(result, host), "deny")
+
+            denied = self.invoke(root, "claude_code", "Read", {"file_path": str(root / ".env")})
+            self.assertEqual(self.decision(denied, "claude_code"), "deny")
+
+    def test_shell_reads_are_scoped_and_unknown_commands_ask(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.root(temporary)
+            outside = self.invoke(root, "claude_code", "Bash", {"command": "cat /etc/passwd"})
+            unknown = self.invoke(root, "claude_code", "Bash", {"command": "custom-tool"})
+            self.assertEqual(self.decision(outside, "claude_code"), "deny")
+            self.assertEqual(self.decision(unknown, "claude_code"), "ask")
+
+    def test_common_delete_apis_are_denied_but_documentation_content_is_not(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.root(temporary)
+            api = self.invoke(
                 root,
                 "claude_code",
-                {
-                    "session_id": "claude-123",
-                    "hook_event_name": "PreToolUse",
-                    "tool_name": "Bash",
-                    "tool_input": {"command": "cat ~/.ssh/id_ed25519"},
-                },
+                "Bash",
+                {"command": "python -c 'import os; os.remove(\"a.txt\")'"},
             )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            output = json.loads(result.stdout)["hookSpecificOutput"]
-            self.assertEqual(output["permissionDecision"], "deny")
-            self.assertIn("sensitive credential", output["permissionDecisionReason"])
+            documentation = self.invoke(
+                root,
+                "claude_code",
+                "Write",
+                {"file_path": str(root / "guide.md"), "content": "Run rm a.txt to delete it."},
+            )
+            self.assertEqual(self.decision(api, "claude_code"), "deny")
+            self.assertEqual(self.decision(documentation, "claude_code"), "ask")
 
-    def test_antigravity_uses_official_tool_call_contract(self) -> None:
+    def test_external_side_effects_ask(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = self.root(temporary)
-            result = self.invoke(
-                root,
-                "antigravity",
-                {
-                    "toolCall": {
-                        "name": "run_command",
-                        "args": {"CommandLine": "sudo rm -rf /", "Cwd": "/workspace"},
-                    },
-                    "stepIdx": 19,
-                    "conversationId": "agy-123",
-                    "workspacePaths": ["/workspace"],
-                    "modelName": "gemini",
-                },
-                "PreToolUse",
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(result.stdout)["decision"], "deny")
-            record = json.loads(self._audit(root, "agy-123"))
-            self.assertEqual(record["tool_name"], "run_command")
-            self.assertEqual(record["event"], "PreToolUse")
+            for host, key in (("claude_code", "command"), ("antigravity", "CommandLine")):
+                result = self.invoke(root, host, "run_command", {key: "git push origin main"})
+                self.assertEqual(self.decision(result, host), "ask")
 
-    def test_antigravity_preserves_native_permission_flow(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = self.root(temporary)
-            command = self.invoke(
-                root,
-                "antigravity",
-                {
-                    "toolCall": {"name": "run_command", "args": {"CommandLine": "npm test"}},
-                    "conversationId": "agy-ask",
-                },
-                "PreToolUse",
-            )
-            self.assertEqual(json.loads(command.stdout)["decision"], "ask")
-
-            local_read = self.invoke(
-                root,
-                "antigravity",
-                {
-                    "toolCall": {"name": "view_file", "args": {"AbsolutePath": "/workspace/a.py"}},
-                    "conversationId": "agy-read",
-                },
-                "PreToolUse",
-            )
-            self.assertEqual(json.loads(local_read.stdout)["decision"], "allow")
-
-    def test_antigravity_pre_invocation_injects_ephemeral_context(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = self.root(temporary)
-            result = self.invoke(
-                root,
-                "antigravity",
-                {"invocationNum": 3, "initialNumSteps": 10, "conversationId": "agy-context"},
-                "PreInvocation",
-            )
-            output = json.loads(result.stdout)
-            self.assertIn("agy-context", output["injectSteps"][0]["ephemeralMessage"])
-
-    def test_portable_policy_controls_shell_denials(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            policy = {**POLICY, "safety": {"deny_shell_patterns": ["terraform destroy"]}}
-            root = self.root(temporary, policy)
-            result = self.invoke(
-                root,
-                "codex",
-                {
-                    "session_id": "policy-123",
-                    "hook_event_name": "PreToolUse",
-                    "tool_name": "Bash",
-                    "tool_input": {"command": "terraform destroy -auto-approve"},
-                },
-            )
-            self.assertEqual(
-                json.loads(result.stdout)["hookSpecificOutput"]["permissionDecision"], "deny"
-            )
-
-    def test_antigravity_policy_failure_returns_native_denial(self) -> None:
+    def test_malformed_policy_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = self.root(temporary)
             (root / "config" / "policies.yaml").write_text("not-json")
-            result = self.invoke(
-                root,
-                "antigravity",
-                {"toolCall": {"name": "run_command", "args": {}}, "conversationId": "agy-bad"},
-                "PreToolUse",
-            )
-            self.assertEqual(result.returncode, 0)
+            result = self.invoke(root, "antigravity", "run_command", {"CommandLine": "pwd"})
             self.assertEqual(json.loads(result.stdout)["decision"], "deny")
             self.assertIn("failed closed", result.stderr)
 
-    @staticmethod
-    def _audit(root: Path, run_id: str) -> str:
-        return (root / ".agent-harness" / "audit" / f"{run_id}.jsonl").read_text()
+    def test_prompt_context_and_audit_are_run_scoped_and_redacted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.root(temporary)
+            payload = {
+                "session_id": "thread-123",
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "secret prompt",
+            }
+            result = subprocess.run(
+                [sys.executable, str(self.scripts / "codex.py"), "--root", str(root)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn(
+                "thread-123", json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+            )
+            audit = (root / ".agent-harness" / "audit" / "thread-123.jsonl").read_text()
+            self.assertNotIn("secret prompt", audit)
 
 
 if __name__ == "__main__":

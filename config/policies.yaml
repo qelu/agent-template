@@ -1,30 +1,30 @@
 {
   "version": "1.0",
+  "actions": {
+    "read": "allow",
+    "write": "ask",
+    "delete": "deny",
+    "external_side_effect": "ask",
+    "unknown": "ask"
+  },
   "scope": {
-    "read_roots": ["."],
-    "write_roots": ["."],
-    "denied_roots": []
+    "allowed_read_paths": ["."],
+    "allowed_write_paths": ["."],
+    "denied_paths": [
+      ".env",
+      ".env.*",
+      ".ssh",
+      ".ssh/**",
+      "credentials",
+      "credentials/**",
+      "secrets",
+      "secrets/**"
+    ]
   },
-  "authorization": {
-    "read_only": "autonomous",
-    "reversible_local_change": "autonomous",
-    "destructive_change": "explicit_approval",
-    "external_side_effect": "explicit_approval",
-    "permission_expansion": "explicit_approval"
-  },
-  "safety": {
-    "deny_shell_patterns": ["rm -rf /", "mkfs", ":(){ :|:& };:"],
-    "require_exact_target_for_destructive_actions": true,
-    "prefer_recoverable_deletion": true
-  },
-  "secrets": {
-    "store_in_repository": false,
-    "denied_path_markers": [".env", ".ssh", "credentials", "secrets"],
-    "allowed_references": ["environment_variable_name", "secret_manager_item_id"]
+  "shell": {
+    "denied_patterns": ["rm -rf /", "mkfs", ":(){ :|:& };:"]
   },
   "audit": {
-    "enabled": true,
-    "log_arguments": false,
-    "redact_keys": ["password", "token", "secret", "api_key"]
+    "enabled": true
   }
 }

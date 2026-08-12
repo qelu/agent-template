@@ -86,11 +86,13 @@ class InitializerCoreTests(unittest.TestCase):
                 "  development_tools: true\n  security_tools: false\n"
             )
             (source / "config" / "capabilities.yaml").write_text(
-                "version: '3.0'\ncapabilities:\n"
-                "  - id: inactive\n    type: skill\n    status: proposed\n"
-                "    description: Proposed test capability.\n"
-                "    hosts: [portable]\n    requires: []\n"
+                "version: '1.0'\ncapabilities:\n"
+                "  - id: inactive\n    type: skill\n    status: experimental\n"
+                "    path: skills/inactive\n"
+                "    description: Experimental test capability.\n"
+                "    when: Use for testing.\n"
             )
+            (source / "skills" / "inactive").mkdir(parents=True)
             self.assertEqual(capability_choices(source), ())
 
     def test_missing_host_install_is_explicit_and_uses_official_package(self) -> None:
@@ -145,6 +147,12 @@ class InitializerCoreTests(unittest.TestCase):
                     "documentation-maintenance",
                     "anthropic-documentation",
                 },
+            )
+            self.assertTrue(
+                all(
+                    set(item) == {"id", "type", "status", "path", "description", "when"}
+                    for item in registry["capabilities"]
+                )
             )
             receipt = yaml.safe_load(
                 (destination / ".agent-harness" / "installation.yaml").read_text()

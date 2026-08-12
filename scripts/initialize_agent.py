@@ -161,14 +161,6 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
     choices = capability_choices(source)
     required_choices = [choice for choice in choices if choice.required]
     optional_choices = [choice for choice in choices if not choice.required]
-    incompatible_required = [
-        choice.capability_id for choice in required_choices if host not in choice.hosts
-    ]
-    if incompatible_required:
-        raise InitializerError(
-            "Required capabilities are incompatible with this host: "
-            + ", ".join(incompatible_required)
-        )
     console.print("\nRequired capabilities", style="bold cyan")
     for choice in required_choices:
         console.print(f"  [green]✓[/green] {choice.capability_id} [dim](locked)[/dim]")
@@ -185,8 +177,7 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
                         Choice(
                             f"{choice.capability_id} — {choice.description}",
                             value=choice.capability_id,
-                            checked=host in choice.hosts,
-                            disabled=None if host in choice.hosts else "incompatible",
+                            checked=True,
                         )
                         for choice in typed_choices
                     ],

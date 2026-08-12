@@ -44,21 +44,21 @@ flowchart LR
 | Durable behavior | `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md` points to one portable contract. |
 | Host-native safety | Codex sandbox/approval settings, Claude Code permissions, and Antigravity hooks. |
 | Run identity | Native session or conversation IDs are normalized as harness run IDs. |
-| Approval boundaries | Plans are exact-scope and never grant conversation-wide authority; native tool approvals remain separate. |
-| Hard safety checks | Host-specific pre-tool bridges apply one portable policy to destructive commands and sensitive paths. |
+| Approval boundaries | Reads are allowed, writes ask through native host controls, and deletions are denied. Plan approval remains separate. |
+| Hard safety checks | Host-specific pre-tool bridges apply one portable policy to allowed and denied paths, shell commands, and tool actions. |
 | Privacy-conscious audit | Hook events record hashes and metadata, never prompts, arguments, or secrets. |
 | Capability selection | Install only the requested skills, runbooks, workflows, hooks, validators, and MCP servers. |
 | Current documentation | Add provider-appropriate official documentation access in the host's native format. |
 | Transactional setup | Build and validate in a temporary sibling, then publish the destination atomically. |
-| Capability validation | The source registry validates artifacts, evaluations, host compatibility, and dependencies. |
+| Capability discovery | A small registry records each capability's ID, description, trigger, state, and path. |
 
 ## Guardrail boundary
 
 The harness deliberately uses two kinds of guardrails:
 
 - **Mechanically enforced:** host sandbox and permission controls, pre-tool hook
-  denials, sensitive-path protection, transactional generation, schema checks,
-  and capability validation.
+  decisions, path scope, deletion and shell denials, transactional generation,
+  strict runtime policy parsing, and capability validation.
 - **Behaviorally governed:** when a task requires a plan, what a plan contains,
   and the rule that an approval applies only to the exact plan presented.
 
@@ -71,6 +71,12 @@ not claim that guarantee where the host does not provide it.
 `config/policies.yaml` is intentionally written in the JSON-compatible subset of
 YAML. Host hooks can therefore consume the same source directly with the Python
 standard library; there is no generated policy copy that can drift.
+
+The portable policy is deliberately small: read actions are allowed inside
+`allowed_read_paths`, writes ask inside `allowed_write_paths`, and deletions are
+always denied. `denied_paths` overrides both allowed lists. Unknown actions ask.
+The same strict parser runs in repository validation, generated-project
+validation, and every host hook; malformed or unknown policy fields fail closed.
 
 ## Supported hosts
 
@@ -173,20 +179,18 @@ harness applies several layers:
 
 1. The prompt hook associates the request with the native Codex `session_id` and
    injects the exact-scope approval reminder.
-2. The agent contract requires an exact target and explicit approval for a
-   destructive operation, so the agent should refuse the unbounded request and
-   ask for a narrow, recoverable target.
-3. If a tool call attempts an obvious system or home deletion such as
-   `rm -rf /` or `rm -rf ~`, the pre-tool hook denies it.
-4. Codex's `workspace-write` sandbox prevents writes outside the configured
-   workspace, provided the workspace itself was scoped safely.
+2. The agent contract requires the agent to follow the deletion denial in the
+   portable policy.
+3. The pre-tool hook denies deletion tools, deletion shell commands, and patch
+   requests containing file-deletion directives.
+4. Codex's `read-only` sandbox sends write attempts through its native approval
+   boundary; the hook independently denies deletions and path-scope violations.
 5. The observed or denied event is appended to the run's redacted audit log.
 
-The run ID correlates events; it is not an authorization token. The hook is also
-pattern-based and cannot recognize every possible destructive program. Files
-inside the writable workspace therefore still depend on native host controls and
-the behavioral contract. Never configure a user's home directory as the project
-workspace.
+The run ID correlates events; it is not an authorization token. Shell
+classification is deterministic and intentionally conservative: unknown commands
+ask rather than run autonomously. Native sandboxing and permissions remain an
+independent layer of defense.
 
 ## Capabilities
 
@@ -202,18 +206,19 @@ uv run python scripts/create_extension.py \
   --name "Summarize Evidence"
 ```
 
-The scaffold begins as `proposed` with a failing behavioral evaluation. Implement
-and run that evaluation, then promote the registry entry to `active` in the same
-reviewed change. Git supplies the change and approval history; teams that need
-external attestations can add them as an optional governance capability.
+The scaffold begins as `experimental`. Implement and test it, then promote the
+registry entry to `active` in the same reviewed change. The registry contains
+only `id`, `type`, `status`, `path`, `description`, and `when`; Git supplies the
+change and approval history.
 
 ## Security notes
 
 - Native project settings cannot override organization-managed host policy.
 - Users must trust project-local hooks before some hosts will execute them.
 - Host bridges are defense in depth, not replacements for native sandboxing and permissions.
-- Antigravity CLI defaults unconfigured sensitive actions to Ask; its project
-  hook adds deterministic denials and audit metadata.
+- Claude Code and Antigravity consume `allow`, `ask`, and `deny` directly from
+  their pre-tool hooks. Codex pre-tool hooks enforce denials while its read-only
+  sandbox and approval flow handle writes that require confirmation.
 - Never commit `.env` files, keys, tokens, credentials, or audit state.
 
 Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
@@ -229,14 +234,15 @@ git diff --check
 
 Tests cover official-shaped event fixtures for every host, generated native
 configuration, initializer transactions, capability validation, run-ID
-normalization, redacted auditing, destructive-command denial, and sensitive-path denial.
+normalization, redacted auditing, path scope, write confirmation, deletion denial,
+unknown commands, and external side effects.
 
 ## Repository layout
 
 ```text
 agent/       portable agent contract
-config/      source persona, policies, capabilities, and schemas
-harness/     initializer and source capability governance
+config/      source persona, portable policy, capabilities, and receipt schema
+harness/     initializer and source validation
 scripts/     initializer, host guardrail, validation, and capability tools
 skills/      packaged source skills
 templates/   generated documentation and extension scaffolds

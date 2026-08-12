@@ -26,8 +26,8 @@ No provider SDK or duplicate model runtime is installed.
 Selected skills live in the host's native project directory. Native permission
 and hook configuration supplies project-level safety controls. The host-specific
 bridge uses the host session/conversation identifier as the run ID, applies the
-portable policy, blocks a small set of deterministic destructive and
-credential-access patterns, and writes redacted metadata under
+portable policy, allows scoped reads, asks for scoped writes, denies deletions
+and denied paths, and writes redacted metadata under
 `.agent-harness/audit/`.
 
 `config/policies.yaml` uses JSON-compatible YAML so the dependency-free hook
@@ -37,11 +37,10 @@ Plan approval applies only to the exact plan presented. A later state-changing
 request is new scope, even in the same conversation. Native tool approval is a
 separate host decision.
 
-An unbounded request such as "delete all my files" must be refused in favor of
-an exact, recoverable target. The hook blocks common system, home, device, and
-credential-path operations, while the host sandbox limits writes to the
-workspace. Keep the workspace narrow: the run ID labels audit events but does
-not authorize them, and the pattern-based hook is not a complete shell sandbox.
+An unbounded request such as "delete all my files" must be refused. The hook
+denies deletion tools, shell commands, and patch directives, while native host
+permissions govern confirmation for writes. Keep the workspace narrow: the run
+ID labels audit events but does not authorize them.
 
 ## License
 

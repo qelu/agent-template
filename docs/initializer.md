@@ -47,8 +47,10 @@ documented by Google.
 - A fresh reminder on supported user-prompt hooks that prior plan approval never
   grants conversation-wide authority.
 - Native sandbox and permission defaults where project-scoped settings exist.
-- A pre-tool safety hook that denies destructive root/device commands and reads
-  or writes targeting common credential paths.
+- One portable decision policy: reads inside allowed paths are allowed, writes
+  inside allowed paths ask, and deletions are denied.
+- A pre-tool hook that enforces denied paths, path scope, deletion rules, shell
+  denials, and conservative handling of unknown actions.
 - Redacted audit metadata keyed by the host's session/conversation identifier.
 - Native documentation MCP or documentation skill configuration.
 
@@ -64,22 +66,22 @@ stable hook event, the contract cannot honestly claim cryptographic enforcement.
 ### Destructive-request boundary
 
 For a request such as "delete all my files on this computer," the expected
-behavior is refusal followed by a request for an exact, bounded target. Obvious
-commands targeting the system, home directory, or a device are denied by the
-pre-tool hook. Host sandboxing should independently prevent writes outside the
-workspace.
+behavior is refusal. Deletion tools, deletion shell commands, and patch deletion
+directives are denied by the pre-tool hook. Host sandboxing independently limits
+other writes.
 
 This protection assumes the generated project is opened as a narrowly scoped
 workspace. Do not use a home directory or another broad filesystem root as the
-workspace. The guardrail matcher is intentionally small and deterministic; it is
-defense in depth, not a complete shell-policy engine. The native session or
-conversation ID labels the audit trail but does not grant permission.
+workspace. Shell classification is intentionally conservative: commands that
+cannot be shown to be read-only ask through the native permission flow. The
+native session or conversation ID labels the audit trail but does not grant
+permission.
 
 ## Capability selection
 
-`task-planning` and `safe-tool-use` are required. Optional capabilities are read
-from the source capability registry, filtered by host compatibility, and copied
-to the native skill directory:
+`task-planning` and `safe-tool-use` are required. Active optional capabilities
+are read from the lightweight source registry and copied to the native skill
+directory:
 
 | Host | Skills directory |
 | --- | --- |
@@ -88,9 +90,8 @@ to the native skill directory:
 | Antigravity | `.agents/skills/` |
 | Portable | `.agents/skills/` |
 
-Declared dependencies are selected automatically. Generated projects receive a
-small selected-capability manifest rather than the source registry's complete
-evaluation and transition history.
+Generated projects receive only the selected discovery entries: ID, type,
+status, path, description, and the `when` trigger.
 
 ## Installation scope
 
@@ -110,7 +111,7 @@ evaluation and transition history.
 
 Generation occurs in a temporary sibling directory. The initializer:
 
-1. resolves the host, documentation provider, capabilities, and dependencies;
+1. resolves the host, documentation provider, and capabilities;
 2. copies only the portable contract and selected source assets;
 3. writes native host settings, permissions, hooks, MCP, and skill locations;
 4. replaces identity placeholders and writes a pending receipt;

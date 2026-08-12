@@ -10,23 +10,12 @@ from pathlib import Path
 from core import (  # type: ignore[import-not-found]
     HookEvent,
     audit_event,
-    blocked_reason,
     emit,
+    evaluate_policy,
     load_policy,
     plan_context,
     read_payload,
 )
-
-
-AUTONOMOUS_READ_TOOLS = {
-    "view_file",
-    "list_dir",
-    "find_by_name",
-    "grep_search",
-    "search_web",
-    "read_url_content",
-    "list_permissions",
-}
 
 
 def main() -> int:
@@ -47,8 +36,8 @@ def main() -> int:
             tool_name=str(tool_call["name"]) if tool_call.get("name") is not None else None,
             tool_input=tool_call.get("args") if isinstance(tool_call.get("args"), dict) else {},
         )
-        reason = blocked_reason(event, policy)
-        audit_event(root, event, "denied" if reason else "observed", policy)
+        decision = evaluate_policy(event, policy, root)
+        audit_event(root, event, decision, policy)
     except (OSError, ValueError) as exc:
         message = f"Antigravity guardrail failed closed: {exc}"
         print(message, file=sys.stderr)
@@ -60,19 +49,8 @@ def main() -> int:
 
     if args.event == "PreInvocation":
         emit({"injectSteps": [{"ephemeralMessage": plan_context(event.run_id)}]})
-    elif reason:
-        emit({"decision": "deny", "reason": reason})
-    elif event.tool_name in AUTONOMOUS_READ_TOOLS:
-        emit(
-            {
-                "decision": "allow",
-                "reason": "Allowed by the project policy for autonomous read-only actions.",
-            }
-        )
     else:
-        emit(
-            {"decision": "ask", "reason": "Continue through Antigravity's native permission flow."}
-        )
+        emit({"decision": decision.outcome, "reason": decision.reason})
     return 0
 
 

@@ -10,8 +10,8 @@ from pathlib import Path
 from core import (  # type: ignore[import-not-found]
     HookEvent,
     audit_event,
-    blocked_reason,
     emit,
+    evaluate_policy,
     load_policy,
     plan_context,
     read_payload,
@@ -37,19 +37,19 @@ def main() -> int:
             else {},
             prompt=payload.get("prompt") if isinstance(payload.get("prompt"), str) else None,
         )
-        reason = blocked_reason(event, policy)
-        audit_event(root, event, "denied" if reason else "observed", policy)
+        decision = evaluate_policy(event, policy, root)
+        audit_event(root, event, decision, policy)
     except (OSError, ValueError) as exc:
         print(f"Codex guardrail failed closed: {exc}", file=sys.stderr)
         return 2
 
-    if reason:
+    if decision.outcome == "deny":
         emit(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "deny",
-                    "permissionDecisionReason": reason,
+                    "permissionDecisionReason": decision.reason,
                 }
             }
         )
