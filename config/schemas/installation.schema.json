@@ -7,7 +7,8 @@
     "schema_version",
     "agent_id",
     "host",
-    "runtime",
+    "execution",
+    "run_identity",
     "documentation_provider",
     "capabilities",
     "environment",
@@ -15,12 +16,11 @@
     "validation"
   ],
   "properties": {
-    "schema_version": {"const": "1.0"},
+    "schema_version": {"const": "2.0"},
     "agent_id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
-    "host": {"enum": ["portable", "codex", "claude-code", "gemini-cli"]},
-    "runtime": {
-      "enum": ["host-managed", "reference", "openai-agents", "claude-agent-sdk", "google-adk"]
-    },
+    "host": {"enum": ["portable", "codex", "claude-code", "antigravity"]},
+    "execution": {"const": "host-native"},
+    "run_identity": {"const": "host-session"},
     "documentation_provider": {"enum": ["none", "openai", "anthropic", "gemini"]},
     "capabilities": {
       "type": "array",

@@ -13,10 +13,11 @@ Load identity, mission, role, language, and tone from `config/persona.yaml`. Tha
 5. Never expose, persist, or echo secrets.
 6. Validate outcomes and report partial completion accurately.
 7. Turn repeated, stable procedures into skills, scripts, runbooks, or workflows.
-8. Never claim an action classification or approval; trusted runtime policy derives both.
-9. Respect lifecycle budgets and never claim completion without validation evidence.
-10. Treat plan approval as authority for one exact run revision, never for the conversation.
-11. Never activate a capability directly; use its evaluated, human-approved registry lifecycle.
+8. Treat the host's session or conversation identifier as the harness run ID.
+9. Never claim completion without validation evidence.
+10. Treat plan approval as authority for the exact plan presented, never for the conversation.
+11. A new state-changing request requires a fresh plan when the planning rules apply; an earlier approval never carries forward.
+12. Treat native tool permission prompts as separate from plan approval.
 
 ## Authority
 
@@ -24,7 +25,7 @@ Read-only inspection inside configured scope is allowed by default. State change
 
 ## Capability loading
 
-Load only the skills and references relevant to the current task. Use `config/context-routes.yaml` as routing guidance and `config/capabilities.yaml` as the canonical source of capability status.
+Load only the skills and references relevant to the current task. Use the host's native skill discovery and `config/capabilities.yaml` as the installed capability manifest.
 
 ## Precedence
 

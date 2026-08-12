@@ -1,7 +1,9 @@
+import json
 import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -9,239 +11,144 @@ import yaml
 
 
 class InitializerTests(unittest.TestCase):
-    def test_minimal_initialization_extension_and_validation(self) -> None:
-        root = Path(__file__).resolve().parent.parent
-        environment = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    @property
+    def root(self) -> Path:
+        return Path(__file__).resolve().parent.parent
+
+    def test_generated_harness_is_lean_and_valid(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "sample-agent"
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(root / "scripts" / "initialize_agent.py"),
-                    "--destination",
-                    str(destination),
-                    "--name",
-                    "Sample",
-                    "--id",
-                    "sample",
-                    "--goal",
-                    "Complete bounded sample tasks.",
-                    "--role",
-                    "sample assistant",
-                    "--tone",
-                    "clear and concise",
-                ],
-                capture_output=True,
-                text=True,
-                env=environment,
-            )
+            result = self._initialize(destination, "codex")
             self.assertEqual(result.returncode, 0, result.stderr)
-            persona = (destination / "config" / "persona.yaml").read_text(encoding="utf-8")
-            self.assertIn('name: "Sample"', persona)
-            self.assertNotIn("__AGENT_NAME__", persona)
-            project = (destination / "pyproject.toml").read_text(encoding="utf-8")
-            self.assertIn('name = "sample"', project)
-            self.assertNotIn("agent-template-placeholder", project)
-            lockfile = (destination / "uv.lock").read_text(encoding="utf-8")
-            self.assertIn('name = "sample"', lockfile)
-            self.assertNotIn("agent-template-placeholder", lockfile)
-            readme = (destination / "README.md").read_text(encoding="utf-8")
-            self.assertIn("# Sample", readme)
-            self.assertNotIn("github.com/qelu/agent-template", readme)
-            self.assertTrue((destination / "LICENSE").is_file())
+            self.assertTrue((destination / "AGENTS.md").is_file())
+            self.assertTrue((destination / ".codex" / "config.toml").is_file())
+            self.assertTrue((destination / ".codex" / "hooks.json").is_file())
+            self.assertTrue((destination / "scripts" / "guardrails" / "codex.py").is_file())
+            self.assertFalse((destination / "scripts" / "guardrails" / "__pycache__").exists())
+            self.assertTrue((destination / ".git").is_dir())
+            self.assertTrue((destination / ".agents" / "skills" / "task-planning").is_dir())
+            self.assertFalse((destination / "harness").exists())
+            self.assertFalse((destination / "tests").exists())
+            self.assertFalse((destination / "config" / "deployment.yaml").exists())
+            self.assertFalse((destination / "config" / "lifecycle.yaml").exists())
+            self.assertFalse((destination / "config" / "tools.yaml").exists())
+            self.assertFalse((destination / "agent" / "config.yaml").exists())
 
-            expected = {
-                ".agent-harness",
-                "agent",
-                "config",
-                "harness",
-                "knowledge",
-                "scripts",
-                "skills",
-                "templates",
-                "tests",
-            }
-            directories = {path.name for path in destination.iterdir() if path.is_dir()}
-            self.assertEqual(directories, expected)
-            for excluded in ("examples", "hooks", "mcps", "runtime", "workflows"):
-                self.assertFalse((destination / excluded).exists())
-            self.assertFalse((destination / "config" / "registry").exists())
-            self.assertFalse((destination / "tests" / "test_initializer.py").exists())
-            self.assertFalse((destination / "tests" / "test_initializer_core.py").exists())
-            deployment = yaml.safe_load(
-                (destination / "config" / "deployment.yaml").read_text(encoding="utf-8")
+            config = tomllib.loads((destination / ".codex" / "config.toml").read_text())
+            self.assertEqual(config["approval_policy"], "on-request")
+            self.assertEqual(config["sandbox_mode"], "workspace-write")
+            self.assertFalse(config["sandbox_workspace_write"]["network_access"])
+            self.assertIn("openaiDeveloperDocs", config["mcp_servers"])
+
+            hooks = json.loads((destination / ".codex" / "hooks.json").read_text())
+            command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+            subdirectory = destination / "nested"
+            subdirectory.mkdir()
+            hook_result = subprocess.run(
+                command,
+                cwd=subdirectory,
+                shell=True,
+                input=json.dumps(
+                    {
+                        "session_id": "generated-root",
+                        "hook_event_name": "PreToolUse",
+                        "tool_name": "Bash",
+                        "tool_input": {"command": "sudo rm -rf /"},
+                    }
+                ),
+                capture_output=True,
+                text=True,
             )
-            self.assertEqual(deployment["host"], "portable")
-            self.assertEqual(deployment["documentation"]["provider"], "none")
-            self.assertEqual(deployment["runtime"]["adapter"], "none")
-            tools = yaml.safe_load(
-                (destination / "config" / "tools.yaml").read_text(encoding="utf-8")
+            self.assertEqual(hook_result.returncode, 0, hook_result.stderr)
+            self.assertEqual(
+                json.loads(hook_result.stdout)["hookSpecificOutput"]["permissionDecision"],
+                "deny",
             )
-            self.assertEqual(tools, {"version": "1.0", "tools": []})
-            lifecycle = yaml.safe_load(
-                (destination / "config" / "lifecycle.yaml").read_text(encoding="utf-8")
-            )
-            self.assertEqual(lifecycle["state_directory"], "runtime/state")
-            self.assertFalse((destination / "runtime").exists())
-            for filename in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
-                self.assertFalse((destination / filename).exists())
-            self.assertEqual(list(destination.glob("skills/*/agents")), [])
+
             receipt = yaml.safe_load(
-                (destination / ".agent-harness" / "installation.yaml").read_text(encoding="utf-8")
+                (destination / ".agent-harness" / "installation.yaml").read_text()
             )
-            self.assertEqual(receipt["validation"], "pending")
-            self.assertEqual(receipt["runtime"], "host-managed")
-
-            extension = subprocess.run(
-                [
-                    sys.executable,
-                    str(destination / "scripts" / "create_extension.py"),
-                    "--type",
-                    "skill",
-                    "--id",
-                    "sample-analysis",
-                    "--name",
-                    "Sample Analysis",
-                ],
-                cwd=destination,
-                capture_output=True,
-                text=True,
-                env=environment,
-            )
-            self.assertEqual(extension.returncode, 0, extension.stderr)
-            evaluation = destination / "tests" / "test_capability_sample_analysis.py"
-            self.assertTrue(evaluation.is_file())
-            self.assertIn("self.fail", evaluation.read_text(encoding="utf-8"))
-
+            self.assertEqual(receipt["schema_version"], "2.0")
+            self.assertEqual(receipt["execution"], "host-native")
+            self.assertEqual(receipt["run_identity"], "host-session")
             validation = subprocess.run(
-                [sys.executable, str(destination / "scripts" / "validate_repository.py")],
+                [sys.executable, str(destination / "scripts" / "validate_harness.py")],
                 cwd=destination,
                 capture_output=True,
                 text=True,
-                env=environment,
             )
             self.assertEqual(validation.returncode, 0, validation.stderr)
 
-    def test_host_and_documentation_profiles(self) -> None:
+    def test_host_profiles_use_native_locations(self) -> None:
         cases = (
-            ("codex", None, "openai", "AGENTS.md", ".codex/config.toml"),
-            ("claude-code", None, "anthropic", "CLAUDE.md", None),
-            ("gemini-cli", None, "gemini", "GEMINI.md", ".gemini/settings.json"),
-            ("claude-code", "gemini", "gemini", "CLAUDE.md", ".mcp.json"),
+            ("codex", "codex", "AGENTS.md", ".agents/skills", ".codex/config.toml"),
+            ("claude-code", "claude-code", "CLAUDE.md", ".claude/skills", ".claude/settings.json"),
+            (
+                "antigravity",
+                "antigravity",
+                "GEMINI.md",
+                ".agents/skills",
+                ".agents/mcp_config.json",
+            ),
+            ("gemini-cli", "antigravity", "GEMINI.md", ".agents/skills", ".agents/mcp_config.json"),
         )
         with tempfile.TemporaryDirectory() as temporary:
-            for host, override, provider, entrypoint, mcp_path in cases:
-                with self.subTest(host=host, provider=provider):
-                    destination = Path(temporary) / f"{host}-{provider}"
-                    result = self._initialize(destination, host, override)
+            for requested, canonical, entrypoint, skill_root, integration in cases:
+                with self.subTest(host=requested):
+                    destination = Path(temporary) / requested
+                    result = self._initialize(destination, requested)
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    deployment = yaml.safe_load(
-                        (destination / "config" / "deployment.yaml").read_text(encoding="utf-8")
+                    receipt = yaml.safe_load(
+                        (destination / ".agent-harness" / "installation.yaml").read_text()
                     )
-                    self.assertEqual(deployment["host"], host)
-                    self.assertEqual(deployment["documentation"]["provider"], provider)
+                    self.assertEqual(receipt["host"], canonical)
                     self.assertTrue((destination / entrypoint).is_file())
-                    if mcp_path:
-                        self.assertTrue((destination / mcp_path).is_file())
-                    if provider == "anthropic":
-                        self.assertTrue(
-                            (
-                                destination / "skills" / "anthropic-documentation" / "SKILL.md"
-                            ).is_file()
-                        )
+                    self.assertTrue(
+                        (destination / skill_root / "task-planning" / "SKILL.md").is_file()
+                    )
+                    self.assertTrue((destination / integration).is_file())
                     validation = subprocess.run(
-                        [
-                            sys.executable,
-                            str(destination / "scripts" / "validate_repository.py"),
-                        ],
+                        [sys.executable, str(destination / "scripts" / "validate_harness.py")],
                         cwd=destination,
                         capture_output=True,
                         text=True,
-                        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
                     )
                     self.assertEqual(validation.returncode, 0, validation.stderr)
-                    generated_tests = subprocess.run(
-                        [
-                            sys.executable,
-                            "-m",
-                            "unittest",
-                            "discover",
-                            "-s",
-                            "tests",
-                            "-v",
-                        ],
-                        cwd=destination,
-                        capture_output=True,
-                        text=True,
-                        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-                    )
-                    self.assertEqual(generated_tests.returncode, 0, generated_tests.stderr)
 
-    def test_reference_runtime_profile(self) -> None:
+    def test_antigravity_profile_uses_current_cli_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            destination = Path(temporary) / "reference-runtime"
-            result = self._initialize(destination, "portable", None, "reference")
+            destination = Path(temporary) / "antigravity"
+            result = self._initialize(destination, "antigravity")
             self.assertEqual(result.returncode, 0, result.stderr)
-            deployment = yaml.safe_load(
-                (destination / "config" / "deployment.yaml").read_text(encoding="utf-8")
-            )
-            self.assertEqual(deployment["runtime"]["adapter"], "reference")
-            generated_tests = subprocess.run(
-                [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
-                cwd=destination,
-                capture_output=True,
-                text=True,
-                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-            )
-            self.assertEqual(generated_tests.returncode, 0, generated_tests.stderr)
-            demo_workspace = destination / "runtime" / "reference-demo"
-            demonstration = subprocess.run(
-                [
-                    sys.executable,
-                    str(destination / "scripts" / "run_reference.py"),
-                    "--yes",
-                    "--workspace",
-                    str(demo_workspace),
-                    "--message",
-                    "Generated harness reference flow.",
-                ],
-                cwd=destination,
-                capture_output=True,
-                text=True,
-                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-            )
-            self.assertEqual(demonstration.returncode, 0, demonstration.stderr)
-            self.assertIn('"status": "completed"', demonstration.stdout)
+            hooks = json.loads((destination / ".agents" / "hooks.json").read_text())
+            self.assertIn("agent-harness-guardrails", hooks)
+            guardrails = hooks["agent-harness-guardrails"]
+            self.assertIn("--event PreInvocation", guardrails["PreInvocation"][0]["command"])
+            self.assertIn("--event PreToolUse", guardrails["PreToolUse"][0]["hooks"][0]["command"])
+            mcp = json.loads((destination / ".agents" / "mcp_config.json").read_text())
             self.assertEqual(
-                (demo_workspace / "output" / "welcome.txt").read_text(encoding="utf-8"),
-                "Generated harness reference flow.\n",
+                mcp["mcpServers"]["geminiDocs"],
+                {"serverUrl": "https://gemini-api-docs-mcp.dev"},
             )
-            tools = yaml.safe_load(
-                (destination / "config" / "tools.yaml").read_text(encoding="utf-8")
-            )
-            self.assertEqual(tools, {"version": "1.0", "tools": []})
 
-    def test_rejects_mcp_for_portable_host_and_unimplemented_runtime(self) -> None:
+    def test_runtime_option_was_removed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            portable = self._initialize(Path(temporary) / "portable-openai", "portable", "openai")
-            self.assertNotEqual(portable.returncode, 0)
-            self.assertIn("requires a concrete --host", portable.stderr)
+            result = self._initialize(
+                Path(temporary) / "runtime", "codex", extra=("--runtime", "reference")
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unrecognized arguments", result.stderr)
 
-            runtime = self._initialize(Path(temporary) / "runtime", "codex", None, "openai-agents")
-            self.assertNotEqual(runtime.returncode, 0)
-            self.assertIn("not implemented", runtime.stderr)
-
-    @staticmethod
     def _initialize(
+        self,
         destination: Path,
         host: str,
-        documentation_provider: str | None,
-        runtime: str = "none",
+        *,
+        extra: tuple[str, ...] = (),
     ) -> subprocess.CompletedProcess[str]:
-        root = Path(__file__).resolve().parent.parent
         command = [
             sys.executable,
-            str(root / "scripts" / "initialize_agent.py"),
+            str(self.root / "scripts" / "initialize_agent.py"),
             "--destination",
             str(destination),
             "--name",
@@ -249,18 +156,15 @@ class InitializerTests(unittest.TestCase):
             "--id",
             "profile-test",
             "--goal",
-            "Validate generated deployment profiles.",
+            "Validate generated host profiles.",
             "--role",
             "test assistant",
             "--tone",
             "concise",
             "--host",
             host,
-            "--runtime",
-            runtime,
+            *extra,
         ]
-        if documentation_provider is not None:
-            command.extend(("--docs-provider", documentation_provider))
         return subprocess.run(
             command,
             capture_output=True,

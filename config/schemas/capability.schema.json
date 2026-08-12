@@ -5,7 +5,7 @@
   "type": "object",
   "required": ["version", "capabilities"],
   "properties": {
-    "version": {"const": "2.0"},
+    "version": {"const": "3.0"},
     "capabilities": {
       "type": "array",
       "items": {"$ref": "#/$defs/capability"}
@@ -17,159 +17,45 @@
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
     },
-    "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "status": {
-      "enum": ["proposed", "tested", "active", "deprecated", "disabled"]
-    },
     "dependency": {
       "type": "object",
       "required": ["id", "minimum_version"],
       "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-        },
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
         "minimum_version": {"$ref": "#/$defs/semver"}
-      },
-      "additionalProperties": false
-    },
-    "compatibility": {
-      "type": "object",
-      "required": ["hosts", "runtime_adapters"],
-      "properties": {
-        "hosts": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {"enum": ["portable", "codex", "claude-code", "gemini-cli"]}
-        },
-        "runtime_adapters": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "enum": [
-              "none",
-              "reference",
-              "openai-agents",
-              "claude-agent-sdk",
-              "google-adk"
-            ]
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "evaluation": {
-      "type": "object",
-      "required": ["suite_digest", "artifact_digest", "passed_at", "recorded_by"],
-      "properties": {
-        "suite_digest": {"$ref": "#/$defs/digest"},
-        "artifact_digest": {"$ref": "#/$defs/digest"},
-        "passed_at": {"type": "string", "format": "date-time"},
-        "recorded_by": {"type": "string", "minLength": 1}
-      },
-      "additionalProperties": false
-    },
-    "activation": {
-      "type": "object",
-      "required": [
-        "approval_id",
-        "approved_by",
-        "approved_at",
-        "version",
-        "artifact_digest",
-        "definition_digest",
-        "suite_digest"
-      ],
-      "properties": {
-        "approval_id": {"type": "string", "minLength": 1},
-        "approved_by": {"type": "string", "minLength": 1},
-        "approved_at": {"type": "string", "format": "date-time"},
-        "version": {"$ref": "#/$defs/semver"},
-        "artifact_digest": {"$ref": "#/$defs/digest"},
-        "definition_digest": {"$ref": "#/$defs/digest"},
-        "suite_digest": {"$ref": "#/$defs/digest"}
-      },
-      "additionalProperties": false
-    },
-    "transition": {
-      "type": "object",
-      "required": ["from", "to", "at", "actor", "reason", "version", "artifact_digest"],
-      "properties": {
-        "from": {"oneOf": [{"$ref": "#/$defs/status"}, {"type": "null"}]},
-        "to": {"$ref": "#/$defs/status"},
-        "at": {"type": "string", "format": "date-time"},
-        "actor": {"type": "string", "minLength": 1},
-        "reason": {"type": "string", "minLength": 1},
-        "version": {"$ref": "#/$defs/semver"},
-        "artifact_digest": {"$ref": "#/$defs/digest"}
       },
       "additionalProperties": false
     },
     "capability": {
       "type": "object",
       "required": [
-        "id",
-        "type",
-        "version",
-        "status",
-        "path",
-        "artifact_digest",
-        "definition_digest",
-        "description",
-        "risk_level",
-        "owner",
-        "requires",
-        "compatibility",
-        "evaluation_suite",
-        "evaluation",
-        "activation",
-        "disabled_from",
-        "history"
+        "id", "type", "version", "status", "path", "description",
+        "risk_level", "hosts", "requires", "evaluation"
       ],
       "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-        },
-        "type": {
-          "enum": ["skill", "workflow", "hook", "runbook", "validator", "mcp-server"]
-        },
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "type": {"enum": ["skill", "workflow", "hook", "runbook", "validator", "mcp-server"]},
         "version": {"$ref": "#/$defs/semver"},
-        "status": {"$ref": "#/$defs/status"},
+        "status": {"enum": ["proposed", "active", "disabled", "deprecated"]},
         "path": {
           "type": "string",
           "minLength": 1,
           "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
         },
-        "artifact_digest": {"$ref": "#/$defs/digest"},
-        "definition_digest": {"$ref": "#/$defs/digest"},
         "description": {"type": "string", "minLength": 10},
         "risk_level": {"enum": ["low", "medium", "high", "critical"]},
-        "owner": {"type": "string", "minLength": 1},
-        "requires": {
-          "type": "array",
-          "items": {"$ref": "#/$defs/dependency"}
-        },
-        "compatibility": {"$ref": "#/$defs/compatibility"},
-        "evaluation_suite": {
-          "oneOf": [
-            {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
-            },
-            {"type": "null"}
-          ]
-        },
-        "evaluation": {"oneOf": [{"$ref": "#/$defs/evaluation"}, {"type": "null"}]},
-        "activation": {"oneOf": [{"$ref": "#/$defs/activation"}, {"type": "null"}]},
-        "disabled_from": {"oneOf": [{"$ref": "#/$defs/status"}, {"type": "null"}]},
-        "history": {
+        "hosts": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/transition"}
+          "uniqueItems": true,
+          "items": {"enum": ["portable", "codex", "claude-code", "antigravity"]}
+        },
+        "requires": {"type": "array", "items": {"$ref": "#/$defs/dependency"}},
+        "evaluation": {
+          "oneOf": [
+            {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+            {"type": "null"}
+          ]
         }
       },
       "additionalProperties": false

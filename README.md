@@ -2,71 +2,96 @@
 
 # Agent Template
 
-### A model-agnostic, security-conscious harness for governed AI agents
+### A host-native, model-agnostic harness for Codex, Claude Code, and Antigravity
 
 [![CI](https://github.com/qelu/agent-template/actions/workflows/ci.yml/badge.svg)](https://github.com/qelu/agent-template/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)
 ![Version](https://img.shields.io/badge/version-v0.1.0-7C3AED)
 [![License](https://img.shields.io/badge/license-Apache--2.0-0EA5E9)](LICENSE)
 
-Build small agents with explicit authority, revision-bound plans, auditable
-capabilities, and portable host configuration.
+Install a lean, governed agent workspace without replacing the host's model runtime.
 
 </div>
 
 > [!IMPORTANT]
-> Version 0.1.0 is an early public release. The governance core and deterministic
-> reference adapter are implemented and tested. Provider SDK runtime adapters are
-> extension points, not production-ready integrations.
+> This template runs *inside* an agent host. Codex, Claude Code, or Antigravity
+> owns inference, authentication, session persistence, sandboxing, and tool
+> execution. The template supplies project instructions, skills, MCP servers,
+> native permissions and hooks, validation, and auditable installation metadata.
 
 ## What this is
 
-Agent Template is a Python foundation for agents whose behavior is constrained by
-code and configuration—not only by prompts. It separates a provider-neutral runtime
-contract from host-specific setup, then places policy checks around every tool call.
+Agent Template creates a project-level harness for an existing coding-agent host.
+It does not call a provider API, install a provider SDK, or implement another model
+loop. Selecting a host is selecting the runtime.
 
-It is intended for developers who want a legible starting point for building agents
-without coupling their governance model to one model vendor or agent application.
-
-## Key features
-
-| Capability | What it provides |
-| --- | --- |
-| Model-neutral boundary | A common request/result interface; provider details stay in adapters. |
-| Exact-scope approvals | Approval is bound to an action, normalized arguments, risk, plan revision, and expiry. |
-| Guardrails | Declarative allowlists, risk levels, argument constraints, and approval requirements. |
-| Revision-bound plans | Materially changed work requires a new plan revision and fresh approval. |
-| Lifecycle controls | Prepare, execute, validate, complete, fail, recover, and clean up with persisted state. |
-| Capability governance | Scaffold, evaluate, activate, detect drift, deprecate, roll back, and audit extensions. |
-| Multi-host initialization | Generate portable, Codex, Claude Code, or Gemini CLI projects. |
-| Current documentation | Configure official-documentation access appropriate to the selected host/provider. |
-| Progressive disclosure | Keep the core agent contract short; load deeper policies only when relevant. |
-| Validation by default | Repository checks, behavioral tests, linting, CI, and dependency update automation. |
-
-## Architecture
+The generated harness combines a portable agent contract with the host's native
+configuration surface:
 
 ```mermaid
 flowchart LR
-    A["Agent request"] --> P["Revision-bound plan"]
-    P --> R["Runtime adapter"]
-    R --> G["Guardrails + approval gate"]
-    G --> T["Tool handler"]
-    T --> L["Lifecycle + audit state"]
-    C["YAML configuration"] --> P
-    C --> G
-    C --> L
-    H["Codex / Claude Code / Gemini CLI"] --> A
+    U["User request"] --> H["Codex / Claude Code / Antigravity"]
+    C["Portable contract + selected capabilities"] --> H
+    N["Native permissions + hooks"] --> H
+    H --> T["Host tools and sandbox"]
+    T --> A["Run-aware audit metadata"]
 ```
 
-The core boundary is provider-independent. `reference` is a deterministic adapter
-for validation and development. `openai-agents`, `claude-agent-sdk`, and `google-adk`
-are named future adapter targets and are deliberately rejected until implemented.
+## What the harness provides
+
+| Capability | Implementation |
+| --- | --- |
+| Durable behavior | `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md` points to one portable contract. |
+| Host-native safety | Codex sandbox/approval settings, Claude Code permissions, and Antigravity hooks. |
+| Run identity | Native session or conversation IDs are normalized as harness run IDs. |
+| Approval boundaries | Plans are exact-scope and never grant conversation-wide authority; native tool approvals remain separate. |
+| Hard safety checks | Host-specific pre-tool bridges apply one portable policy to destructive commands and sensitive paths. |
+| Privacy-conscious audit | Hook events record hashes and metadata, never prompts, arguments, or secrets. |
+| Capability selection | Install only the requested skills, runbooks, workflows, hooks, validators, and MCP servers. |
+| Current documentation | Add provider-appropriate official documentation access in the host's native format. |
+| Transactional setup | Build and validate in a temporary sibling, then publish the destination atomically. |
+| Capability validation | The source registry validates artifacts, evaluations, host compatibility, and dependencies. |
+
+## Guardrail boundary
+
+The harness deliberately uses two kinds of guardrails:
+
+- **Mechanically enforced:** host sandbox and permission controls, pre-tool hook
+  denials, sensitive-path protection, transactional generation, schema checks,
+  and capability validation.
+- **Behaviorally governed:** when a task requires a plan, what a plan contains,
+  and the rule that an approval applies only to the exact plan presented.
+
+The second category is injected on every supported Codex and Claude Code user
+turn and is also part of the canonical contract for every host. A project-level
+template cannot cryptographically prove that a human approved a semantic plan
+unless the host exposes that approval as a stable hook event. The repository does
+not claim that guarantee where the host does not provide it.
+
+`config/policies.yaml` is intentionally written in the JSON-compatible subset of
+YAML. Host hooks can therefore consume the same source directly with the Python
+standard library; there is no generated policy copy that can drift.
+
+## Supported hosts
+
+| Host | Native project files | Default documentation |
+| --- | --- | --- |
+| `codex` | `AGENTS.md`, `.codex/config.toml`, `.codex/hooks.json`, `.agents/skills/` | OpenAI Docs MCP |
+| `claude-code` | `CLAUDE.md`, `.claude/settings.json`, `.claude/skills/` | Anthropic documentation skill |
+| `antigravity` | `AGENTS.md`, `GEMINI.md`, `.agents/hooks.json`, `.agents/skills/` | Gemini Docs MCP |
+| `portable` | `AGENTS.md`, `.agents/skills/` | None |
+
+`gemini-cli` remains accepted as an initializer compatibility alias and resolves
+to the canonical `antigravity` profile. Antigravity CLI is launched with `agy`.
+
+The generated locations follow the hosts' published project conventions:
+[Codex project configuration](https://learn.chatgpt.com/docs/config-file/config-reference),
+[Claude Code settings](https://code.claude.com/docs/en/settings), and
+[Antigravity CLI configuration](https://antigravity.google/docs/cli/getting-started).
 
 ## Quick start
 
-Bootstrap prerequisites: Git and [uv](https://docs.astral.sh/uv/). `uv` obtains
-the selected Python version and creates project-local environments; the
-initializer never modifies the system Python.
+Prerequisites are Git and [uv](https://docs.astral.sh/uv/):
 
 ```bash
 git clone https://github.com/qelu/agent-template.git
@@ -76,28 +101,13 @@ uv run python scripts/validate_repository.py
 uv run python -m unittest discover -s tests -v
 ```
 
-Launch the keyboard-driven terminal initializer:
+Launch the terminal initializer:
 
 ```bash
 uv run python scripts/initialize_agent.py
 ```
 
-The wizard collects the destination, identity, host, runtime, documentation
-integration, capabilities, Python version, development tools, and security
-checks. Required safety capabilities are locked. Optional skills, hooks,
-runbooks, workflows, validators, and MCP servers are grouped automatically from
-the governed capability registry.
-
-Before changing anything, the wizard displays the resolved installation plan,
-including every external command. Project dependencies are installed into the
-generated `.venv`; a missing host CLI or Gitleaks is installed globally only
-when the user explicitly selects and approves that action. Generation occurs in
-a temporary sibling directory, and the requested destination is published only
-after provisioning and validation succeed. Provider authentication remains in
-the provider's official first-launch/login flow, and credentials are never
-written by the initializer.
-
-For CI or repeatable automation, supply the same choices as flags:
+Or run it non-interactively:
 
 ```bash
 uv run python scripts/initialize_agent.py \
@@ -108,130 +118,82 @@ uv run python scripts/initialize_agent.py \
   --role "research assistant" \
   --tone "clear and evidence-led" \
   --host claude-code \
-  --runtime none \
   --capability evidence-gathering \
   --install
 ```
 
-Use `--dry-run` to print the complete plan without changing anything. Repeat
-`--capability` to include optional capabilities; task planning and safe tool use
-are always included. If the flag is omitted, all packaged capabilities are
-retained for backward compatibility. External global installation commands also
-require `--yes` in non-interactive mode.
+Use `--dry-run` to inspect the complete installation plan without changing
+anything. Existing destinations are never overwritten. Provider credentials are
+never requested or written; authentication stays in the selected host.
 
-The initializer refuses to overwrite an existing destination. It copies the
-minimal governed core and lockfile, generates a project-specific README,
-replaces identity placeholders, records deployment choices in
-`.agent-harness/installation.yaml`, refreshes capability attestations, and
-validates the generated harness.
+See the [terminal initializer guide](docs/initializer.md) for every option,
+generated path, installation boundary, receipt field, and failure behavior.
 
-See the [complete terminal initializer guide](docs/initializer.md) for field
-definitions, keyboard controls, host/runtime semantics, installation scope,
-receipts, failure behavior, and every automation flag.
+## Generated project
 
-## Choose a host and documentation provider
+A normal initialized project is intentionally small:
 
-Host defaults keep generated projects useful without baking vendor behavior into
-the core contract.
-
-| Host | Entry point | Default docs integration |
-| --- | --- | --- |
-| `portable` | `agent/AGENT.md` | None |
-| `codex` | `AGENTS.md` | OpenAI documentation MCP |
-| `claude-code` | `CLAUDE.md` | Anthropic documentation skill |
-| `gemini-cli` | `GEMINI.md` | Gemini documentation MCP |
-
-```bash
-# Codex with its default OpenAI documentation integration
-uv run python scripts/initialize_agent.py ... --host codex
-
-# Claude Code using a Gemini documentation MCP instead
-uv run python scripts/initialize_agent.py ... \
-  --host claude-code --docs-provider gemini
+```text
+.agent-harness/installation.yaml   immutable installation choices
+agent/AGENT.md                     portable behavioral contract
+config/persona.yaml                identity, goal, language, and tone
+config/policies.yaml               portable authority and safety intent
+config/capabilities.yaml           selected capability manifest
+scripts/guardrails/                shared policy evaluator plus one bridge per host
+scripts/validate_harness.py        generated-project conformance check
+<host-native files>                instructions, permissions, hooks, MCP
+<host-native skills directory>     only selected skills
 ```
 
-Valid providers are `none`, `openai`, `anthropic`, and `gemini`. MCP-backed
-documentation requires a concrete host because each host stores MCP configuration
-differently. The Anthropic option uses official documentation indexes through a
-governed skill rather than pretending an official MCP exists.
+It does **not** contain provider SDK adapters, a Python model loop, a duplicate
+lifecycle database, tool-event schemas, or standalone runtime state.
 
-## How governed execution works
+## Run IDs and plans
 
-1. Inspect the request and relevant repository state.
-2. Create a plan revision for the bounded implementation.
-3. Obtain approval for that exact revision when policy requires it.
-4. Prepare lifecycle state and normalize the proposed tool call.
-5. Evaluate allowlists, argument constraints, risk, and approval scope.
-6. Execute through the selected runtime and registered handler.
-7. Validate the result, persist audit state, and complete or recover.
+The host's own session identifier is the run ID:
 
-An approval is not a permanent conversation-wide bypass. If the plan, action,
-arguments, or risk changes, the approval no longer matches. This prevents the
-common failure mode where approval of the first implementation plan silently
-authorizes unrelated later work.
+- Codex and Claude Code provide `session_id` to hooks.
+- Antigravity provides `conversationId`.
 
-## Run the complete reference flow
+The host bridge writes redacted JSONL metadata under
+`.agent-harness/audit/<run-id>.jsonl`; that directory is ignored by Git. The
+hook never stores raw prompts or tool arguments.
 
-The reference runner demonstrates the entire governed lifecycle without a model
-provider, API key, network call, or active tool in the canonical registry:
+Plan approval remains narrowly scoped:
 
-```bash
-uv run python scripts/run_reference.py
-```
+1. A state-changing request receives a plan when planning rules apply.
+2. The user approves or changes that exact plan.
+3. Native host permissions still govern each sensitive tool action.
+4. A later state-changing request is new scope and cannot inherit the old plan approval.
 
-It creates the new isolated workspace `runtime/reference-demo`, defines one exact
-plan, requests plan approval, requests separate approval for a local file write,
-executes through the reference adapter, validates the output, and persists the
-completed audit state. It never overwrites an existing workspace and does not
-change `config/deployment.yaml` or `config/tools.yaml`.
+### Example: an unbounded deletion request
 
-For a deterministic non-interactive smoke test, choose a fresh workspace:
+If a user asks Codex to "delete all my files on this computer," the generated
+harness applies several layers:
 
-```bash
-uv run python scripts/run_reference.py \
-  --yes \
-  --workspace runtime/reference-demo-ci \
-  --message "Validate the governed reference path."
-```
+1. The prompt hook associates the request with the native Codex `session_id` and
+   injects the exact-scope approval reminder.
+2. The agent contract requires an exact target and explicit approval for a
+   destructive operation, so the agent should refuse the unbounded request and
+   ask for a narrow, recoverable target.
+3. If a tool call attempts an obvious system or home deletion such as
+   `rm -rf /` or `rm -rf ~`, the pre-tool hook denies it.
+4. Codex's `workspace-write` sandbox prevents writes outside the configured
+   workspace, provided the workspace itself was scoped safely.
+5. The observed or denied event is appended to the run's redacted audit log.
 
-## Test a runtime adapter contract
+The run ID correlates events; it is not an authorization token. The hook is also
+pattern-based and cannot recognize every possible destructive program. Files
+inside the writable workspace therefore still depend on native host controls and
+the behavioral contract. Never configure a user's home directory as the project
+workspace.
 
-`harness/adapter_conformance.py` provides one reusable behavioral suite for every
-runtime adapter. A provider adapter supplies a fresh `AdapterConformanceFixture`
-backed by a fake provider client and inherits the same tests:
+## Capabilities
 
-```python
-class ProviderAdapterTests(RuntimeAdapterConformanceMixin, unittest.TestCase):
-    def make_adapter_fixture(self) -> AdapterConformanceFixture:
-        return fixture_for_fake_provider_client()
-```
+`task-planning` and `safe-tool-use` are required. Optional packaged capabilities
+currently include `evidence-gathering` and `documentation-maintenance`.
 
-The suite verifies adapter-owned identity, immutable argument snapshots, unique
-run and call IDs, schema-valid correlated results, exact pause/resume behavior,
-single dispatch, tamper rejection, normalized failures and partial effects, strict
-JSON arguments, and honest hard-timeout claims. The reference adapter is the
-checked-in example in `tests/test_adapter_conformance.py`.
-
-## Configuration map
-
-| File | Responsibility |
-| --- | --- |
-| `agent/AGENT.md` | Canonical agent contract and instruction precedence |
-| `config/persona.yaml` | Identity, role, goal, tone, and language |
-| `config/deployment.yaml` | Host, documentation provider, and runtime adapter |
-| `config/tools.yaml` | Available tool definitions |
-| `config/guardrails.yaml` | Risk and execution constraints |
-| `config/approvals.yaml` | Approval policy and trusted approver patterns |
-| `config/planning.yaml` | Planning triggers and revision rules |
-| `config/lifecycle.yaml` | State-machine and recovery policy |
-| `config/capabilities.yaml` | Capability registry, attestations, and history |
-
-Configuration is the authority. Provider prompts and host entry points should point
-to the contract rather than duplicate it.
-
-## Capabilities and extensions
-
-Create a governed extension scaffold:
+Create another capability in the source template with:
 
 ```bash
 uv run python scripts/create_extension.py \
@@ -240,33 +202,23 @@ uv run python scripts/create_extension.py \
   --name "Summarize Evidence"
 ```
 
-The scaffold begins inactive and includes a failing evaluation stub. After the
-implementation and evaluation are ready, manage its lifecycle explicitly:
+The scaffold begins as `proposed` with a failing behavioral evaluation. Implement
+and run that evaluation, then promote the registry entry to `active` in the same
+reviewed change. Git supplies the change and approval history; teams that need
+external attestations can add them as an optional governance capability.
 
-```bash
-uv run python scripts/manage_capability.py test summarize-evidence \
-  --actor human:reviewer
-uv run python scripts/manage_capability.py activate summarize-evidence \
-  --actor human:reviewer --approval-id review-123
-uv run python scripts/manage_capability.py verify summarize-evidence
-```
+## Security notes
 
-Artifact, definition, and evaluation digests make unreviewed drift visible. See
-`templates/skill/` and `templates/mcp/` for the supported extension shapes.
+- Native project settings cannot override organization-managed host policy.
+- Users must trust project-local hooks before some hosts will execute them.
+- Host bridges are defense in depth, not replacements for native sandboxing and permissions.
+- Antigravity CLI defaults unconfigured sensitive actions to Ask; its project
+  hook adds deterministic denials and audit metadata.
+- Never commit `.env` files, keys, tokens, credentials, or audit state.
 
-## Security model
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-The harness enforces application-level policy at a central execution boundary.
-That materially reduces accidental overreach, but it is not a security sandbox.
-Production deployments should also isolate credentials, minimize filesystem and
-network permissions, validate tool inputs, and treat retrieved content as untrusted.
-
-Never commit `.env` files, private keys, access tokens, credential exports, or local
-runtime state. The repository ignores common sensitive artifacts, and CI runs with
-read-only repository permissions. Report vulnerabilities privately as described in
-[SECURITY.md](SECURITY.md).
-
-## Testing and validation
+## Validation
 
 ```bash
 uv run python scripts/validate_repository.py
@@ -275,54 +227,31 @@ uv run ruff check .
 git diff --check
 ```
 
-The suite covers configuration schemas, planning, approvals, guardrails, lifecycle
-recovery, runtime boundaries and adapter conformance, the complete reference run,
-capability governance, initializer profiles, and generated-repository validation.
+Tests cover official-shaped event fixtures for every host, generated native
+configuration, initializer transactions, capability validation, run-ID
+normalization, redacted auditing, destructive-command denial, and sensitive-path denial.
 
 ## Repository layout
 
 ```text
-agent/       canonical contract and policy documents
-config/      declarative persona, deployment, tools, and governance
-harness/     provider-neutral enforcement and lifecycle code
-scripts/     initialization, validation, and capability management
-skills/      governed capability implementations
-templates/   generated README and extension scaffolds
-tests/       behavioral and repository tests
+agent/       portable agent contract
+config/      source persona, policies, capabilities, and schemas
+harness/     initializer and source capability governance
+scripts/     initializer, host guardrail, validation, and capability tools
+skills/      packaged source skills
+templates/   generated documentation and extension scaffolds
+tests/       host conformance and behavioral tests
 ```
-
-## Versions and Git workflow
-
-Releases follow [Semantic Versioning](https://semver.org/) and use annotated tags
-such as `v0.1.0`. Before 1.0, breaking changes increment the minor version. Changes
-are recorded in [CHANGELOG.md](CHANGELOG.md).
-
-For contributions, fork the repository, branch from `main`, make focused commits,
-run the full validation suite, and open a pull request. CI and Dependabot do not
-grant direct write access: only explicitly authorized collaborators can push, and a
-GitHub branch ruleset can require even those collaborators to use pull requests.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow.
-
-Recommended maintainer release flow:
-
-1. Update `CHANGELOG.md` and the package version.
-2. Merge a reviewed release pull request with green CI.
-3. Create an annotated `vX.Y.Z` tag on the release commit.
-4. Publish GitHub release notes from the changelog.
-5. Keep `main` protected against force-pushes and deletions after initial publication.
 
 ## Roadmap
 
-- Implement and validate provider SDK runtime adapters behind the existing boundary.
-- Expand behavioral and adversarial evaluations for approvals and recovery.
-- Add optional generated CI and deployment profiles without bloating the minimal core.
-- Stabilize public interfaces toward a 1.0 release.
+- Expand conformance fixtures as host-native permission and hook surfaces evolve.
+- Add optional packaged hooks, workflows, runbooks, and MCP integrations.
+- Improve semantic plan-approval enforcement when hosts expose stable approval events.
+- Stabilize the initializer and generated manifest toward a 1.0 release.
 
-## Project status
-
-This is a focused foundation, not a hosted agent service. It does not provide a UI,
-credential broker, OS sandbox, or production provider adapter. Those concerns remain
-deployment responsibilities or future extensions.
+Provider SDK adapters are not on the critical path. They belong in a separate
+headless-runtime project if that use case is pursued later.
 
 ## License
 

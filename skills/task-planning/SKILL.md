@@ -13,4 +13,8 @@ description: Convert ambiguous or multi-step requests into bounded execution pla
 6. Define success checks and rollback for every risky mutation.
 7. Keep one step active at a time and update the plan when evidence changes.
 
+Approval applies only to the exact plan immediately presented. A later state-changing
+request is a new scope and requires its own plan when these triggers apply, even in the
+same conversation. The host's tool-permission prompt is not plan approval.
+
 Skip formal planning for a single safe, reversible action. Do not use a plan as a substitute for required approval.

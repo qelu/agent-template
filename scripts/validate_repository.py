@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Validate the minimal template, configuration, capabilities, and skills."""
+"""Validate the host-native template, capability registry, and initializer."""
 
+import json
 import os
 import re
 import sys
@@ -14,24 +15,14 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from harness.configuration import ConfigurationError, load_yaml  # noqa: E402
-from harness.approvals import ApprovalError, ApprovalStore  # noqa: E402
-from harness.deployment import (  # noqa: E402
-    DeploymentError,
-    load_deployment,
-    validate_runtime_activation,
+from harness.initializer import (  # noqa: E402
+    HOSTS,
+    InitializerError,
+    capability_choices,
+    load_initializer_config,
 )
-from harness.lifecycle import (  # noqa: E402
-    LifecycleError,
-    LifecycleEngine,
-    load_lifecycle_config,
-    validate_lifecycle_runtime_compatibility,
-)
-from harness.registry import CapabilityError, load_capabilities  # noqa: E402
 from harness.policy import PolicyError, load_policy  # noqa: E402
-from harness.plans import PlanApprovalError, PlanApprovalStore  # noqa: E402
-from harness.runtime import RuntimeBoundaryError, validate_runtime_schemas  # noqa: E402
-from harness.state_store import StateStoreError  # noqa: E402
-from harness.tool_policy import ToolPolicyError, load_tool_policies  # noqa: E402
+from harness.registry import CapabilityError, load_capabilities  # noqa: E402
 
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
 TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".toml", ".py"}
@@ -46,41 +37,25 @@ IGNORED_DIRECTORIES = {
 }
 REQUIRED = (
     "agent/AGENT.md",
-    "agent/config.yaml",
     "config/capabilities.yaml",
-    "config/context-routes.yaml",
-    "config/deployment.yaml",
     "config/initializer.yaml",
-    "config/lifecycle.yaml",
     "config/persona.yaml",
     "config/policies.yaml",
     "config/schemas/capability.schema.json",
-    "config/schemas/deployment.schema.json",
-    "config/schemas/lifecycle.schema.json",
     "config/schemas/installation.schema.json",
-    "config/schemas/approval.schema.json",
-    "config/schemas/post-tool-event.schema.json",
     "config/schemas/policy.schema.json",
-    "config/schemas/plan-approval.schema.json",
-    "config/schemas/pre-tool-event.schema.json",
-    "config/schemas/run-state.schema.json",
-    "config/schemas/tool-policy.schema.json",
-    "config/tools.yaml",
-    "harness/approvals.py",
-    "harness/guarded_runtime.py",
+    "harness/configuration.py",
     "harness/initializer.py",
-    "harness/guardrails.py",
-    "harness/lifecycle.py",
-    "harness/lifecycle_runtime.py",
-    "harness/plans.py",
-    "harness/reference_adapter.py",
-    "harness/runtime.py",
-    "harness/runtime_factory.py",
-    "harness/state_store.py",
-    "harness/tool_policy.py",
+    "harness/policy.py",
+    "harness/registry.py",
+    "scripts/guardrails/core.py",
+    "scripts/guardrails/codex.py",
+    "scripts/guardrails/claude_code.py",
+    "scripts/guardrails/antigravity.py",
     "scripts/initialize_agent.py",
-    "scripts/create_extension.py",
-    "scripts/manage_capability.py",
+    "scripts/validate_harness.py",
+    "scripts/validate_repository.py",
+    "templates/generated-pyproject.toml",
 )
 
 
@@ -94,15 +69,6 @@ def repository_text_files(root: Path) -> Iterator[Path]:
                 yield path
 
 
-def load_yaml_fragment(text: str) -> dict[str, object]:
-    import yaml
-
-    payload = yaml.safe_load(text)
-    if not isinstance(payload, dict):
-        raise ValueError("frontmatter must be a mapping")
-    return payload
-
-
 def validate_skill(path: Path) -> list[str]:
     skill_file = path / "SKILL.md"
     if not skill_file.is_file():
@@ -112,49 +78,48 @@ def validate_skill(path: Path) -> list[str]:
     if not match:
         return [f"Invalid frontmatter in {skill_file.relative_to(ROOT)}"]
     try:
-        metadata = load_yaml_fragment(match.group(1))
-    except ValueError as exc:
+        metadata = yaml.safe_load(match.group(1))
+    except yaml.YAMLError as exc:
         return [f"{skill_file.relative_to(ROOT)}: {exc}"]
     errors: list[str] = []
-    if set(metadata) != {"name", "description"}:
+    if not isinstance(metadata, dict) or set(metadata) != {"name", "description"}:
         errors.append(
-            f"{skill_file.relative_to(ROOT)} frontmatter must contain only name and description"
+            f"{skill_file.relative_to(ROOT)} frontmatter must contain name and description"
         )
-    if metadata.get("name") != path.name:
+    elif metadata.get("name") != path.name:
         errors.append(f"Skill name must match folder: {path.name}")
-    if not str(metadata.get("description", "")).strip():
-        errors.append(f"Skill description must not be empty: {path.name}")
     return errors
 
 
 def main() -> int:
     errors: list[str] = []
-    deployment: dict[str, object] | None = None
     for relative in REQUIRED:
         if not (ROOT / relative).exists():
             errors.append(f"Missing required path: {relative}")
 
-    for relative in (
-        "agent/config.yaml",
-        "config/context-routes.yaml",
-        "config/initializer.yaml",
-        "config/lifecycle.yaml",
-        "config/persona.yaml",
-        "config/policies.yaml",
-    ):
+    for relative in ("config/initializer.yaml", "config/persona.yaml", "config/policies.yaml"):
         try:
             load_yaml(ROOT / relative)
         except ConfigurationError as exc:
             errors.append(str(exc))
 
+    try:
+        json.loads((ROOT / "config" / "policies.yaml").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"config/policies.yaml must remain JSON-compatible YAML: {exc}")
+
+    try:
+        initializer = load_initializer_config(ROOT)
+        if initializer["defaults"]["host"] not in HOSTS:
+            errors.append("Initializer default host is unsupported")
+        capability_choices(ROOT)
+    except (InitializerError, OSError, ValueError) as exc:
+        errors.append(str(exc))
+
     receipt = ROOT / ".agent-harness" / "installation.yaml"
     if receipt.exists():
         try:
-            schema = yaml.safe_load(
-                (ROOT / "config" / "schemas" / "installation.schema.json").read_text(
-                    encoding="utf-8"
-                )
-            )
+            schema = json.loads((ROOT / "config/schemas/installation.schema.json").read_text())
             payload = yaml.safe_load(receipt.read_text(encoding="utf-8"))
             jsonschema.Draft202012Validator(schema).validate(payload)
         except (jsonschema.ValidationError, OSError, ValueError, yaml.YAMLError) as exc:
@@ -167,44 +132,8 @@ def main() -> int:
         capabilities = []
 
     try:
-        deployment = load_deployment(ROOT)
-        validate_runtime_activation(deployment, capabilities)
-    except (DeploymentError, ConfigurationError, OSError, ValueError) as exc:
-        errors.append(str(exc))
-
-    try:
-        validate_runtime_schemas(ROOT)
-    except (RuntimeBoundaryError, OSError, ValueError) as exc:
-        errors.append(str(exc))
-
-    try:
-        load_tool_policies(ROOT)
-    except (ToolPolicyError, ConfigurationError, OSError, ValueError) as exc:
-        errors.append(str(exc))
-
-    try:
         load_policy(ROOT)
     except (PolicyError, ConfigurationError, OSError, ValueError) as exc:
-        errors.append(str(exc))
-
-    try:
-        ApprovalStore(ROOT)
-    except (ApprovalError, OSError, ValueError) as exc:
-        errors.append(str(exc))
-
-    try:
-        PlanApprovalStore(ROOT)
-    except (PlanApprovalError, OSError, ValueError) as exc:
-        errors.append(str(exc))
-
-    try:
-        lifecycle = load_lifecycle_config(ROOT)
-        LifecycleEngine(ROOT)
-        if deployment is not None:
-            runtime = deployment["runtime"]
-            if isinstance(runtime, dict):
-                validate_lifecycle_runtime_compatibility(lifecycle, str(runtime["adapter"]))
-    except (LifecycleError, StateStoreError, ConfigurationError, OSError, ValueError) as exc:
         errors.append(str(exc))
 
     registered_skill_paths = {

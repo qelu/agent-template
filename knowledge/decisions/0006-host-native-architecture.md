@@ -1,0 +1,38 @@
+# ADR 0006: Make the selected host the agent runtime
+
+- Status: accepted
+- Date: 2026-08-09
+
+## Context
+
+The template is installed inside Codex, Claude Code, or Antigravity projects.
+Each host already owns inference, authentication, sessions, tool dispatch,
+permissions, and sandboxing. A second provider SDK runtime duplicated those
+responsibilities, introduced separate token billing, and could not automatically
+intercept work performed by the actual host.
+
+## Decision
+
+The initializer generates a host-native project harness. Selecting the host also
+selects the runtime; there is no provider adapter choice.
+
+The portable layer owns the agent contract, persona, authority intent,
+capability selection, plan semantics, validation, and installation receipt.
+Host profiles map that layer to native instruction files, permissions, hooks,
+skills, and MCP configuration.
+
+Native hook metadata supplies the run identity. Codex and Claude Code session
+IDs and Antigravity conversation IDs are normalized as harness run IDs. Host-specific
+protocol bridges share one policy evaluator, record redacted metadata, and enforce
+deterministic safety denials without assuming a common event schema.
+
+Exact semantic plan approval remains a behavioral contract unless a host exposes
+a stable, trustworthy approval event. Native tool approval remains mechanically
+enforced and is never treated as blanket plan approval.
+
+## Consequences
+
+Generated projects are smaller and do not require provider API keys or separate
+SDK token billing. The repository no longer claims enforcement through a model
+runtime that the selected host bypasses. Host conformance tests and documentation
+must evolve with the supported products' native configuration contracts.

@@ -22,5 +22,6 @@ runtime/logs/*
 !runtime/logs/.gitkeep
 runtime/state/*
 !runtime/state/.gitkeep
+.agent-harness/audit/
 *.local.yaml
 *.local.json

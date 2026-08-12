@@ -1,126 +1,138 @@
 # Terminal initializer guide
 
-The Agent Harness Initializer turns this template into a configured, validated
-harness in a new destination. Run it from a clone of the template:
+The initializer installs a project-level harness for an existing agent host. It
+does not install or select a provider SDK runtime: Codex, Claude Code, or
+Antigravity already owns the model loop.
 
 ```bash
 uv run python scripts/initialize_agent.py
 ```
 
-Git and `uv` are the bootstrap requirements. `uv` obtains the selected Python
-version, creates the generated project's `.venv`, and installs locked Python
-dependencies. The initializer does not replace the system Python.
+Git and `uv` are the bootstrap requirements. The optional provisioning step uses
+`uv` to obtain the selected Python version and create a project-local `.venv`.
+The system Python is never replaced.
 
 ## Wizard flow
 
-The interactive wizard collects and resolves these choices:
+1. **Destination** — a new directory; existing destinations are never overwritten.
+2. **Identity** — display name and stable lowercase Agent ID.
+3. **Persona** — goal, role, tone, and language.
+4. **Host** — Codex, Claude Code, Antigravity, or portable.
+5. **Documentation** — OpenAI, Anthropic, Gemini, or none.
+6. **Capabilities** — required safety skills and selected optional packages.
+7. **Environment** — Python, development tools, Gitleaks, and optional host CLI.
+8. **Review** — exact files and external commands before confirmation.
 
-1. **Destination** — a new directory outside the template repository. Existing
-   destinations are never overwritten.
-2. **Agent name** — the human-readable name shown in the generated harness.
-3. **Agent ID** — the stable machine identifier used in package metadata,
-   configuration, and the installation receipt. It is normalized to lowercase
-   words separated by hyphens, such as `research-assistant`.
-4. **Goal, role, tone, and language** — the initial agent persona and operating
-   objective.
-5. **Host** — Codex, Claude Code, Gemini CLI, or portable configuration.
-6. **Documentation integration** — the provider-appropriate documentation MCP
-   or governed documentation skill.
-7. **Runtime** — host-managed execution or the deterministic reference runtime.
-8. **Capabilities** — required guardrails plus compatible optional skills,
-   hooks, runbooks, workflows, validators, and MCP servers.
-9. **Environment** — Python, development tools, Gitleaks, and optional host CLI
-   installation.
-10. **Review** — the exact resolved plan and any external commands, followed by
-    a final confirmation.
+Use arrows for selection, Space to toggle checkboxes, Enter to continue, and
+Ctrl+C to cancel without creating the destination.
 
-Use the arrow keys to choose a single option, Space to toggle checkbox entries,
-Enter to continue, and Ctrl+C to cancel. Cancellation does not create the
-destination.
+## Host selection
 
-## Host and runtime are separate
+The host is also the runtime. There is no second runtime question.
 
-The host is the application in which the generated harness will be used. The
-runtime determines who owns the model loop.
+| Choice | Launcher | Project configuration |
+| --- | --- | --- |
+| `codex` | `codex` | `AGENTS.md`, `.codex/config.toml`, `.codex/hooks.json` |
+| `claude-code` | `claude` | `CLAUDE.md`, `.claude/settings.json` |
+| `antigravity` | `agy` | `AGENTS.md`, `GEMINI.md`, `.agents/hooks.json` |
+| `portable` | host-defined | portable contract and `.agents/skills/` |
 
-| Selection | Meaning |
-| --- | --- |
-| Claude Code + host-managed | Claude Code owns the model loop; no Claude Agent SDK is installed. |
-| Codex + host-managed | Codex owns the model loop; no OpenAI Agents SDK is installed. |
-| Gemini CLI + host-managed | Gemini CLI owns the model loop; no Google ADK is installed. |
-| Any supported host + reference | The local deterministic adapter exercises the governed runtime without a provider API. |
+The legacy `gemini-cli` argument is accepted as an alias for `antigravity`.
+Antigravity uses the `agy` binary and workspace assets under `.agents/`, as
+documented by Google.
 
-Provider SDK runtimes remain named compatibility targets and are rejected until
-their adapters are implemented and pass the adapter conformance suite.
+## Guardrails generated for every concrete host
+
+- One canonical agent contract with exact-scope plan approval semantics.
+- A fresh reminder on supported user-prompt hooks that prior plan approval never
+  grants conversation-wide authority.
+- Native sandbox and permission defaults where project-scoped settings exist.
+- A pre-tool safety hook that denies destructive root/device commands and reads
+  or writes targeting common credential paths.
+- Redacted audit metadata keyed by the host's session/conversation identifier.
+- Native documentation MCP or documentation skill configuration.
+
+The hook records hashes, host, event, run ID, turn ID, tool name, and outcome. It
+does not store prompt or argument content. Audit files live under
+`.agent-harness/audit/` and are ignored by Git.
+
+Plan approval and native tool approval are deliberately separate. The former is
+a semantic agreement about scope; the latter is enforced by the host before a
+sensitive operation. When a host does not expose semantic plan approval as a
+stable hook event, the contract cannot honestly claim cryptographic enforcement.
+
+### Destructive-request boundary
+
+For a request such as "delete all my files on this computer," the expected
+behavior is refusal followed by a request for an exact, bounded target. Obvious
+commands targeting the system, home directory, or a device are denied by the
+pre-tool hook. Host sandboxing should independently prevent writes outside the
+workspace.
+
+This protection assumes the generated project is opened as a narrowly scoped
+workspace. Do not use a home directory or another broad filesystem root as the
+workspace. The guardrail matcher is intentionally small and deterministic; it is
+defense in depth, not a complete shell-policy engine. The native session or
+conversation ID labels the audit trail but does not grant permission.
 
 ## Capability selection
 
-`task-planning` and `safe-tool-use` are required and cannot be deselected. The
-wizard reads all other choices from the governed capability registry, groups
-them by type, disables incompatible combinations, and automatically adds declared
-dependencies.
+`task-planning` and `safe-tool-use` are required. Optional capabilities are read
+from the source capability registry, filtered by host compatibility, and copied
+to the native skill directory:
 
-The current packaged optional catalog contains `evidence-gathering` and
-`documentation-maintenance`. Host-specific documentation capabilities are added
-from the selected documentation profile. The selector already understands
-skills, hooks, runbooks, workflows, validators, and MCP servers; newly packaged
-and registered capabilities will appear automatically.
+| Host | Skills directory |
+| --- | --- |
+| Codex | `.agents/skills/` |
+| Claude Code | `.claude/skills/` |
+| Antigravity | `.agents/skills/` |
+| Portable | `.agents/skills/` |
+
+Declared dependencies are selected automatically. Generated projects receive a
+small selected-capability manifest rather than the source registry's complete
+evaluation and transition history.
 
 ## Installation scope
 
 | Requirement | Behavior |
 | --- | --- |
-| Python | Obtained by `uv` at the selected version; system Python is unchanged. |
-| Python packages | Installed from `uv.lock` into the generated `.venv`. |
-| Ruff, pytest, mypy, pre-commit | Installed through the locked `dev` extra when development tools are selected. |
-| Gitleaks | Reused when detected; on systems with Homebrew it can be installed only after explicit approval. Other systems fail safely with installation guidance. |
-| Host CLI | Reused when detected; an absent Codex, Claude Code, or Gemini CLI can be installed through its published npm package only after explicit approval. |
-| Provider SDK | Not installed for host-managed execution. It will be installed only by a future implemented provider-runtime profile. |
-| Credentials | Never collected or written. Authentication remains in the host's official login or first-launch flow. |
+| Python | Obtained by `uv`; system Python remains unchanged. |
+| Python packages | Installed into the generated `.venv`. |
+| Development tools | Ruff, pytest, mypy, and pre-commit from the dev extra. |
+| Gitleaks | Required and run only when security tools are selected. |
+| Codex CLI | Optional explicit installation using the official npm package. |
+| Claude Code | Optional explicit installation using the official npm package. |
+| Antigravity CLI | Detected as `agy`; use Google's official installer when absent. The initializer does not pipe a remote script into a shell. |
+| Provider SDKs | Never installed. |
+| Credentials | Never collected or written; use the host's login flow. |
 
-Global commands are listed in the review screen. Declining them does not prevent
-generation unless the selected validation requires the missing tool.
+## Transaction and validation
 
-## Transaction and validation behavior
+Generation occurs in a temporary sibling directory. The initializer:
 
-The initializer resolves compatibility and dependencies before writing. It then
-builds the harness in a temporary sibling directory, replaces placeholders,
-filters unselected capabilities, refreshes attestations, and writes a pending
-receipt.
+1. resolves the host, documentation provider, capabilities, and dependencies;
+2. copies only the portable contract and selected source assets;
+3. writes native host settings, permissions, hooks, MCP, and skill locations;
+4. replaces identity placeholders and writes a pending receipt;
+5. optionally provisions the `.venv`, validates the harness, runs Ruff and Gitleaks;
+6. atomically publishes the destination only after success.
 
-When environment installation is selected, it runs:
-
-```text
-uv sync with the selected Python and extras
-repository validation
-the complete generated test suite
-Ruff, when development tools are selected
-Gitleaks, when security tools are selected
-```
-
-Only a successful staged project is moved to the requested destination. Failed
-generation or validation removes the staged project and leaves the destination
-absent. The initializer also rejects capability artifact paths that could escape
-the staged project.
+Failure removes the staging directory and leaves the requested destination absent.
 
 ## Installation receipt
 
-Every generated harness contains `.agent-harness/installation.yaml`. It records:
+`.agent-harness/installation.yaml` records:
 
-- Agent ID, host, runtime, and documentation provider
-- The final capability set, including generated documentation capabilities
-- Python and environment-tool choices
-- Whether project dependencies or a host installation were requested
-- The exact external commands approved for the run
-- `validation: pending` when provisioning was skipped, or `validation: passed`
-  after all selected checks succeed
-
-The repository validator checks the receipt against
-`config/schemas/installation.schema.json`.
+- `schema_version: "2.0"`
+- canonical host
+- `execution: host-native`
+- `run_identity: host-session`
+- documentation provider and selected capabilities
+- environment and security-tool choices
+- approved external commands
+- `validation: pending` or `validation: passed`
 
 ## Non-interactive operation
-
-All important wizard choices have command-line equivalents:
 
 ```bash
 uv run python scripts/initialize_agent.py \
@@ -131,9 +143,8 @@ uv run python scripts/initialize_agent.py \
   --role "research assistant" \
   --tone "clear and evidence-led" \
   --language en-US \
-  --host claude-code \
-  --docs-provider anthropic \
-  --runtime none \
+  --host antigravity \
+  --docs-provider gemini \
   --capability evidence-gathering \
   --python 3.13 \
   --install
@@ -141,31 +152,19 @@ uv run python scripts/initialize_agent.py \
 
 | Flag | Purpose |
 | --- | --- |
-| `--wizard` | Force interactive mode. Running without a destination also starts it. |
-| `--destination PATH` | New generated-project destination. |
-| `--name`, `--id`, `--goal`, `--role`, `--tone`, `--language` | Identity and persona fields. |
-| `--host` | `portable`, `codex`, `claude-code`, or `gemini-cli`. |
+| `--wizard` | Force interactive mode. |
+| `--destination PATH` | New harness destination. |
+| `--name`, `--id`, `--goal`, `--role`, `--tone`, `--language` | Identity and persona. |
+| `--host` | `portable`, `codex`, `claude-code`, `antigravity`, or alias `gemini-cli`. |
 | `--docs-provider` | `none`, `openai`, `anthropic`, or `gemini`. |
-| `--runtime` | `none` for host-managed execution or `reference`. Unimplemented provider adapters fail closed. |
-| `--capability ID` | Include one optional capability; repeat for more. Required capabilities are automatic. Omitting the flag retains every packaged capability. |
-| `--python VERSION` | Python version passed to `uv`; supported wizard choices are 3.11–3.13. |
-| `--install` | Create the environment and run all selected validation. |
-| `--dev-tools` / `--no-dev-tools` | Include or omit the development-tool extra. |
+| `--capability ID` | Include an optional capability; repeat for more. |
+| `--python VERSION` | Python version passed to `uv`. |
+| `--install` | Provision and validate the generated project. |
+| `--dev-tools` / `--no-dev-tools` | Include or omit development tools. |
 | `--security-tools` | Require and run Gitleaks. |
-| `--install-host-tool` | Approve planning a missing host CLI installation. |
-| `--yes` | Confirm planned external installation commands in non-interactive mode. |
-| `--dry-run` | Print the resolved plan without changing anything. |
-| `--no-color` | Disable Rich color output. |
+| `--install-host-tool` | Plan an approved Codex or Claude Code CLI installation when absent. |
+| `--yes` | Approve external commands non-interactively. |
+| `--dry-run` | Print the plan without writing. |
+| `--no-color` | Disable terminal color. |
 
-For a safe preview:
-
-```bash
-uv run python scripts/initialize_agent.py \
-  --destination ../research-agent \
-  --name "Research Agent" \
-  --goal "Produce cited research." \
-  --role "research assistant" \
-  --tone concise \
-  --host claude-code \
-  --dry-run
-```
+There is intentionally no `--runtime` or provider-SDK option.
