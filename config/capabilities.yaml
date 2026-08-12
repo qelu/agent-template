@@ -1,45 +1,29 @@
-version: "3.0"
+version: "1.0"
 capabilities:
   - id: task-planning
     type: skill
-    version: "1.0.0"
     status: active
     path: skills/task-planning
-    description: Plan bounded work with explicit scope, risk, validation, and rollback.
-    risk_level: low
-    hosts: &all_hosts [portable, codex, claude-code, antigravity]
-    requires: []
-    evaluation: tests/test_skills.py
+    description: Plan bounded work with explicit scope, validation, and rollback.
+    when: Use for multi-step work or any request that changes state beyond a trivial edit.
 
   - id: evidence-gathering
     type: skill
-    version: "1.0.0"
     status: active
     path: skills/evidence-gathering
     description: Verify material claims using direct observation and primary evidence.
-    risk_level: low
-    hosts: *all_hosts
-    requires: []
-    evaluation: tests/test_skills.py
+    when: Use when conclusions depend on repository inspection, research, or current facts.
 
   - id: safe-tool-use
     type: skill
-    version: "1.0.0"
     status: active
     path: skills/safe-tool-use
     description: Apply tools within scope, least privilege, and approval boundaries.
-    risk_level: medium
-    hosts: *all_hosts
-    requires: []
-    evaluation: tests/test_skills.py
+    when: Use before executing tools that can change state or cross a trust boundary.
 
   - id: documentation-maintenance
     type: skill
-    version: "1.0.0"
     status: active
     path: skills/documentation-maintenance
     description: Maintain durable decisions and operational documentation without duplication.
-    risk_level: low
-    hosts: *all_hosts
-    requires: []
-    evaluation: tests/test_skills.py
+    when: Use when behavior or architecture changes require durable project documentation.

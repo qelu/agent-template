@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scaffold a proposed skill, workflow, or unregistered runbook."""
+"""Scaffold an experimental skill, workflow, or unregistered runbook."""
 
 from __future__ import annotations
 
@@ -14,14 +14,11 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from harness.registry import proposed_capability  # noqa: E402
+from harness.registry import experimental_capability  # noqa: E402
 
 TEMPLATES = ROOT / "templates"
 
-CAPABILITY_TARGETS = {
-    "skill": ("skills", "skill", "low"),
-    "workflow": ("workflows", "workflow", "medium"),
-}
+CAPABILITY_TARGETS = {"skill": ("skills", "skill"), "workflow": ("workflows", "workflow")}
 
 
 def normalize(value: str) -> str:
@@ -52,7 +49,7 @@ def scaffold_runbook(extension_id: str, name: str) -> Path:
 
 
 def scaffold_capability(capability_type: str, extension_id: str, name: str) -> Path:
-    folder, template_name, risk_level = CAPABILITY_TARGETS[capability_type]
+    folder, template_name = CAPABILITY_TARGETS[capability_type]
     source = TEMPLATES / template_name
     destination = ROOT / folder / extension_id
     if destination.exists():
@@ -72,28 +69,13 @@ def scaffold_capability(capability_type: str, extension_id: str, name: str) -> P
             "example-workflow": extension_id,
         },
     )
-    suite = ROOT / "tests" / f"test_capability_{extension_id.replace('-', '_')}.py"
-    if suite.exists():
-        raise SystemExit(f"Evaluation suite already exists: {suite}")
-    suite.write_text(
-        "import unittest\n\n\n"
-        f"class {''.join(part.title() for part in extension_id.split('-'))}CapabilityTests"
-        "(unittest.TestCase):\n"
-        "    def test_behavioral_contract(self) -> None:\n"
-        '        self.fail("Replace with a behavioral evaluation before promotion")\n\n\n'
-        'if __name__ == "__main__":\n'
-        "    unittest.main()\n",
-        encoding="utf-8",
-    )
     capabilities.append(
-        proposed_capability(
+        experimental_capability(
             capability_id=extension_id,
             capability_type=capability_type,
-            version="0.1.0",
             path=str(destination.relative_to(ROOT)),
-            description=f"Proposed capability for {name}.",
-            risk_level=risk_level,
-            evaluation=str(suite.relative_to(ROOT)),
+            description=f"Experimental capability for {name}.",
+            when=f"Use when the task requires {name.lower()}.",
         )
     )
     registry_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
@@ -114,7 +96,7 @@ def main() -> None:
         return
 
     destination = scaffold_capability(args.type, extension_id, args.name)
-    print(f"Created proposed {args.type} at {destination.relative_to(ROOT)}")
+    print(f"Created experimental {args.type} at {destination.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

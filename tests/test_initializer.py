@@ -36,8 +36,7 @@ class InitializerTests(unittest.TestCase):
 
             config = tomllib.loads((destination / ".codex" / "config.toml").read_text())
             self.assertEqual(config["approval_policy"], "on-request")
-            self.assertEqual(config["sandbox_mode"], "workspace-write")
-            self.assertFalse(config["sandbox_workspace_write"]["network_access"])
+            self.assertEqual(config["sandbox_mode"], "read-only")
             self.assertIn("openaiDeveloperDocs", config["mcp_servers"])
 
             hooks = json.loads((destination / ".codex" / "hooks.json").read_text())

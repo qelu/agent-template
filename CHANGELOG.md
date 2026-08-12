@@ -33,13 +33,17 @@ the project follows Semantic Versioning.
 - Simplified generated projects to contain only portable policy, selected
   capabilities, native host configuration, guardrails, and validation tools.
 - Replaced the multi-actor capability attestation state machine with a concise
-  Git-reviewed registry of status, compatibility, dependencies, and evaluations.
+  Git-reviewed discovery registry of IDs, descriptions, triggers, states, and paths.
+- Unified portable guardrail decisions around scoped reads, confirmed writes,
+  prohibited deletions, denied paths, and conservative unknown actions.
 
 ### Removed
 
 - Provider SDK runtime selection and unimplemented adapter choices.
 - The duplicate Python model loop, reference adapter, runtime lifecycle state,
   tool-event schemas, adapter conformance suite, and reference runner.
+- Policy and capability JSON Schemas superseded by strict validation in the code
+  that consumes each file.
 
 ## [0.1.0] - 2026-08-08
 

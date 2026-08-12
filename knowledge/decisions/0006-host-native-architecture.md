@@ -24,7 +24,12 @@ skills, and MCP configuration.
 Native hook metadata supplies the run identity. Codex and Claude Code session
 IDs and Antigravity conversation IDs are normalized as harness run IDs. Host-specific
 protocol bridges share one policy evaluator, record redacted metadata, and enforce
-deterministic safety denials without assuming a common event schema.
+deterministic allow, ask, and deny decisions without assuming a common event schema.
+
+Claude Code and Antigravity translate all three outcomes through their native
+`PreToolUse` responses. Codex hooks enforce `deny`; Codex's read-only sandbox and
+native approval system implement `ask` for writes because its pre-tool response
+does not expose an interactive ask outcome.
 
 Exact semantic plan approval remains a behavioral contract unless a host exposes
 a stable, trustworthy approval event. Native tool approval remains mechanically

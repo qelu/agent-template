@@ -16,6 +16,8 @@ from typing import Any
 
 import yaml
 
+from harness.registry import CapabilityError, load_capabilities
+
 
 TEXT_SUFFIXES = {"", ".md", ".yaml", ".yml", ".json", ".toml", ".lock", ".py", ".txt"}
 GENERATED_DIRECTORIES = {".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv"}
@@ -108,8 +110,6 @@ class CapabilityChoice:
     capability_type: str
     description: str
     required: bool
-    requires: tuple[str, ...]
-    hosts: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -144,10 +144,10 @@ def slug(value: str) -> str:
 
 
 def _load_source_capabilities(source: Path) -> list[dict[str, Any]]:
-    payload = yaml.safe_load((source / "config" / "capabilities.yaml").read_text(encoding="utf-8"))
-    if not isinstance(payload, dict) or not isinstance(payload.get("capabilities"), list):
-        raise InitializerError("config/capabilities.yaml must contain a capabilities list")
-    return [item for item in payload["capabilities"] if isinstance(item, dict)]
+    try:
+        return load_capabilities(source)
+    except (CapabilityError, OSError, ValueError) as exc:
+        raise InitializerError(str(exc)) from exc
 
 
 def capability_choices(source: Path) -> tuple[CapabilityChoice, ...]:
@@ -170,16 +170,12 @@ def capability_choices(source: Path) -> tuple[CapabilityChoice, ...]:
     for item in capabilities:
         if item.get("status") != "active":
             continue
-        hosts = item.get("hosts", HOSTS)
-        hosts = [HOST_ALIASES.get(str(value), str(value)) for value in hosts]
         choices.append(
             CapabilityChoice(
                 capability_id=str(item["id"]),
                 capability_type=str(item["type"]),
                 description=str(item["description"]),
                 required=str(item["id"]) in required,
-                requires=tuple(str(value["id"]) for value in item.get("requires", [])),
-                hosts=tuple(dict.fromkeys(hosts)),
             )
         )
     return tuple(choices)
@@ -236,20 +232,6 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
     if unknown:
         raise InitializerError(f"Unknown capabilities: {', '.join(unknown)}")
     selected.update(choice.capability_id for choice in choices if choice.required)
-    changed = True
-    while changed:
-        changed = False
-        for capability_id in tuple(selected):
-            for requirement in by_id[capability_id].requires:
-                if requirement not in selected:
-                    selected.add(requirement)
-                    changed = True
-    incompatible = sorted(value for value in selected if host not in by_id[value].hosts)
-    if incompatible:
-        raise InitializerError(
-            "Capabilities are incompatible with the selected host: " + ", ".join(incompatible)
-        )
-
     tools_to_check = ["git", "uv"]
     host_command = HOST_COMMANDS.get(host)
     if host_command:
@@ -392,10 +374,10 @@ def copy_host_native_template(source: Path, destination: Path, plan: Installatio
             {
                 "id": capability_id,
                 "type": capability_type,
-                "version": str(item["version"]),
+                "status": str(item["status"]),
                 "path": relative_path.as_posix(),
                 "description": str(item["description"]),
-                "risk_level": str(item["risk_level"]),
+                "when": str(item["when"]),
             }
         )
     write_yaml(
@@ -451,8 +433,7 @@ def write_host_profile(destination: Path, host: str, provider: str) -> None:
         config = (
             "#:schema https://developers.openai.com/codex/config-schema.json\n"
             'approval_policy = "on-request"\n'
-            'sandbox_mode = "workspace-write"\n\n'
-            "[sandbox_workspace_write]\nnetwork_access = false\n\n"
+            'sandbox_mode = "read-only"\n\n'
             "[features]\nhooks = true\n"
         )
         (codex / "config.toml").write_text(config, encoding="utf-8")
@@ -563,10 +544,10 @@ def register_documentation_capability(destination: Path, host: str, provider: st
         {
             "id": capability_id,
             "type": capability_type,
-            "version": "1.0.0",
+            "status": "active",
             "path": capability_path.as_posix(),
             "description": description,
-            "risk_level": "low",
+            "when": "Use when current official provider documentation is required.",
         }
     )
     write_yaml(path, registry)
