@@ -16,8 +16,15 @@ uv sync --extra dev
 uv run python scripts/validate_repository.py
 uv run python -m unittest discover -s tests -v
 uv run ruff check .
+uv run mypy harness scripts tests
+uv lock --check
 git diff --check
 ```
+
+Documentation changes must keep the source README, initializer guide, generated
+README template, ADRs, security model, and changelog consistent with executable
+behavior. When policy semantics change, update the cross-host conformance tests
+and the accepted architecture decision in the same pull request.
 
 Use imperative commit subjects, keep unrelated work in separate commits, and do
 not commit generated caches, credentials, local environment files, or secrets.

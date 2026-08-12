@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Describe the need before the implementation. Provider-specific additions should preserve the model-neutral governance boundary.
+        Describe the need before the implementation. Host-specific additions should preserve the separation between the portable contract, declarative configuration, and native enforcement.
   - type: checkboxes
     id: checks
     attributes:
@@ -14,7 +14,7 @@ body:
       options:
         - label: I searched existing issues and roadmap items for similar work.
           required: true
-        - label: This request does not require weakening guardrails, approvals, or lifecycle enforcement.
+        - label: This request does not require weakening portable allow/ask/deny decisions or native host enforcement.
           required: true
   - type: textarea
     id: problem
@@ -35,12 +35,13 @@ body:
     attributes:
       label: Primary scope
       options:
-        - governance core
-        - runtime adapter
+        - portable contract
+        - declarative policy or persona
+        - host-native enforcement
         - initializer or host profile
-        - capability lifecycle
+        - capability discovery
         - documentation
-        - testing or evaluation
+        - testing or validation
         - other
     validations:
       required: true
@@ -52,4 +53,4 @@ body:
     id: compatibility
     attributes:
       label: Compatibility and security considerations
-      description: Note effects on hosts, runtimes, configuration, authority, and migration.
+      description: Note effects on hosts, native settings, portable configuration, authority, and migration.

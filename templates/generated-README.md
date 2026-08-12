@@ -31,7 +31,18 @@ and denied paths, and writes redacted metadata under
 `.agent-harness/audit/`.
 
 `config/policies.yaml` uses JSON-compatible YAML so the dependency-free hook
-bridges read that exact file directly.
+bridges read that exact file directly. The strict runtime parser rejects malformed
+or unknown fields and fails closed. The default decisions are:
+
+- reads inside `allowed_read_paths`: allow;
+- writes inside `allowed_write_paths`: ask;
+- denied or out-of-scope paths: deny;
+- deletions: deny;
+- external side effects and unknown actions: ask.
+
+Claude Code and Antigravity return `ask` directly from `PreToolUse`. Codex's
+pre-tool hook enforces denials while its generated read-only sandbox and
+`on-request` approval flow provide the native confirmation boundary for writes.
 
 Plan approval applies only to the exact plan presented. A later state-changing
 request is new scope, even in the same conversation. Native tool approval is a

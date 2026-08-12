@@ -32,16 +32,26 @@ body:
         - portable
         - Codex
         - Claude Code
-        - Gemini CLI
+        - Antigravity
+        - gemini-cli compatibility alias
         - source repository
         - other
     validations:
       required: true
-  - type: input
-    id: runtime
+  - type: dropdown
+    id: layer
     attributes:
-      label: Runtime adapter
-      placeholder: none or reference
+      label: Affected layer
+      options:
+        - contract or persona
+        - portable policy
+        - host-native hook or permissions
+        - initializer
+        - capability discovery
+        - validation or documentation
+        - unknown
+    validations:
+      required: true
   - type: textarea
     id: reproduction
     attributes:

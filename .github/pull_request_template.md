@@ -11,5 +11,8 @@
 - [ ] Repository validator passes
 - [ ] Unit tests pass
 - [ ] Ruff passes
+- [ ] mypy passes
+- [ ] `uv lock --check` passes
 - [ ] Documentation and changelog are updated when needed
+- [ ] Generated documentation matches source behavior
 - [ ] No credentials, personal paths, or generated caches are included

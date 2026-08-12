@@ -7,4 +7,6 @@
 5. Validate: confirm service and security health.
 6. Learn: record facts, contributing conditions, and follow-up actions.
 
-Never rotate credentials, delete data, or contact external parties without the authority required by policy.
+Never delete data: the base policy denies deletion even when requested in chat.
+Credential rotation and contact with external parties require the policy's native
+confirmation boundary and an exact target.

@@ -11,7 +11,7 @@ the project follows Semantic Versioning.
   core guardrails, optional capability selection, environment preflight, dry
   runs, explicit external-command approval, and installation receipts.
 - Reusable initialization specification, resolution, transactional generation,
-  provisioning, and validation layers with a minimal generated dependency manifest.
+  provisioning, and validation layers with a minimal generated capability manifest.
 - Complete operator documentation for wizard controls, Agent IDs, host-native
   semantics, capability selection, installation scope, receipts, rollback, and
   non-interactive flags.
@@ -19,8 +19,8 @@ the project follows Semantic Versioning.
 - Native Codex, Claude Code, and Antigravity project profiles with permissions,
   hooks, skill locations, and documentation integrations.
 - Host-specific guardrail bridges backed by one portable policy,
-  redacted run-aware audit metadata, and deterministic destructive or
-  credential-path denials.
+  redacted run-aware audit metadata, path scope, write confirmation, deletion
+  denial, and conservative handling of unknown actions.
 - Official-shaped hook protocol fixtures, host-profile conformance tests, and
   generated-project validation.
 
@@ -36,6 +36,8 @@ the project follows Semantic Versioning.
   Git-reviewed discovery registry of IDs, descriptions, triggers, states, and paths.
 - Unified portable guardrail decisions around scoped reads, confirmed writes,
   prohibited deletions, denied paths, and conservative unknown actions.
+- Updated repository, generated-project, contributor, security, example, and ADR
+  documentation to describe the same host-native enforcement boundary.
 
 ### Removed
 

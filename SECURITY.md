@@ -21,14 +21,21 @@ an initial assessment within seven business days. Timelines may vary because the
 project is maintained on a best-effort basis.
 
 Security reports may cover the host integration boundary, native hook and
-permission configuration, initializer behavior, capability governance, or the
+permission configuration, initializer behavior, capability discovery, or the
 release supply chain.
 
 ## Security model
 
 This project adds project-level instructions, native host settings, pre-tool
-denials, and validation; it is not a model runtime or operating-system sandbox.
+allow/ask/deny decisions, path scope, and validation; it is not a model runtime
+or operating-system sandbox.
 Deployments must still rely on the selected host for authentication, sandboxing,
 and tool authorization, isolate credentials, review host permissions, and treat
 model output and fetched content as untrusted input. Semantic plan approval is a
 behavioral contract unless the host exposes a trustworthy approval event.
+
+The base portable policy allows scoped reads, asks for scoped writes and external
+side effects, asks for unknown actions, and denies deletion. `denied_paths`
+overrides both allowed path lists. These checks are defense in depth: shell and
+tool classification is deterministic but cannot replace the selected host's
+native sandbox or organization-managed policy.

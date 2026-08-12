@@ -8,13 +8,15 @@ Apply a scoped change with validation and rollback.
 
 - Confirm target and ownership.
 - Capture current state or backup.
-- Confirm required approval under `config/policies.yaml`.
+- Confirm the action is not denied and identify any native confirmation required
+  by `config/policies.yaml`.
 
 ## Procedure
 
 1. Run read-only diagnostics.
 2. State the exact mutation and expected effect.
-3. Execute only after the applicable approval boundary is satisfied.
+3. Execute only after the applicable native confirmation boundary is satisfied.
+   Never treat confirmation as authority to override `deny`.
 4. Stop on unexpected output; do not improvise a broader mutation.
 
 ## Validation
