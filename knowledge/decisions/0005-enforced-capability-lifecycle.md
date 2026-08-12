@@ -1,31 +1,24 @@
-# ADR 0005: Enforce capability lifecycle in one registry
+# ADR 0005: Keep capability governance lightweight
 
 - Status: accepted
 - Date: 2026-08-08
 
 ## Context
 
-A status label alone cannot prevent an agent from silently activating changed behavior. The
-template also needs to remain portable across Codex, Claude Code, and Antigravity without
-duplicating activation state.
+The original registry persisted artifact, definition, evaluation, activation, and transition
+digests for every capability. That was appropriate for a multi-actor service, but it duplicated
+Git history and made routine skill changes needlessly ceremonial in a single-operator project.
 
 ## Decision
 
-`config/capabilities.yaml` remains the only activation source. Each record binds its semantic
-version to an artifact digest, compatibility declaration, versioned dependencies, evaluation
-evidence, exact human activation attestation, disabled-state metadata, and contiguous transition
-history.
-
-The host-operated lifecycle manager enforces promotion, emergency disable and safe restore,
-version reset, deprecation, and removal. Its `test` command executes the declared suite before
-recording evidence. Its activation path is trusted host functionality and is not model-callable.
-
-Active capabilities must have current evidence and approval plus active compatible dependencies.
-Host compatibility is resolved by the initializer. Any unversioned artifact or evaluation-suite
-change fails source-template validation.
+`config/capabilities.yaml` remains the selection source and records only identity, type, semantic
+version, status, path, description, risk, compatible hosts, dependencies, and an evaluation suite.
+Validation rejects missing artifacts, missing evaluations for active capabilities, incompatible
+dependencies, old dependency versions, and cycles. Git history supplies change attribution and
+review evidence. Promotion is an ordinary reviewed registry edit after the evaluation passes.
 
 ## Consequences
 
-Capability updates require an explicit version bump, retest, and human activation. The registry
-is more verbose, but authority remains local, reviewable, and provider-neutral. Removal drops the
-registry entry only; deleting artifacts remains a separate reviewed action.
+The registry stays readable and portable. Teams needing cryptographic attestations or external
+approval records can add that as an optional governance capability without burdening the core
+template.

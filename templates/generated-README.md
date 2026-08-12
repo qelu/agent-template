@@ -24,10 +24,14 @@ host owns inference, authentication, sessions, sandboxing, and tool execution.
 No provider SDK or duplicate model runtime is installed.
 
 Selected skills live in the host's native project directory. Native permission
-and hook configuration supplies project-level safety controls. The shared hook
-uses the host session/conversation identifier as the run ID, blocks a small set
-of deterministic destructive and credential-access patterns, and writes
-redacted metadata under `.agent-harness/audit/`.
+and hook configuration supplies project-level safety controls. The host-specific
+bridge uses the host session/conversation identifier as the run ID, applies the
+portable policy, blocks a small set of deterministic destructive and
+credential-access patterns, and writes redacted metadata under
+`.agent-harness/audit/`.
+
+`config/policies.yaml` uses JSON-compatible YAML so the dependency-free hook
+bridges read that exact file directly.
 
 Plan approval applies only to the exact plan presented. A later state-changing
 request is new scope, even in the same conversation. Native tool approval is a

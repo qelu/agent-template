@@ -23,6 +23,9 @@ class InitializerTests(unittest.TestCase):
             self.assertTrue((destination / "AGENTS.md").is_file())
             self.assertTrue((destination / ".codex" / "config.toml").is_file())
             self.assertTrue((destination / ".codex" / "hooks.json").is_file())
+            self.assertTrue((destination / "scripts" / "guardrails" / "codex.py").is_file())
+            self.assertFalse((destination / "scripts" / "guardrails" / "__pycache__").exists())
+            self.assertTrue((destination / ".git").is_dir())
             self.assertTrue((destination / ".agents" / "skills" / "task-planning").is_dir())
             self.assertFalse((destination / "harness").exists())
             self.assertFalse((destination / "tests").exists())
@@ -36,6 +39,31 @@ class InitializerTests(unittest.TestCase):
             self.assertEqual(config["sandbox_mode"], "workspace-write")
             self.assertFalse(config["sandbox_workspace_write"]["network_access"])
             self.assertIn("openaiDeveloperDocs", config["mcp_servers"])
+
+            hooks = json.loads((destination / ".codex" / "hooks.json").read_text())
+            command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+            subdirectory = destination / "nested"
+            subdirectory.mkdir()
+            hook_result = subprocess.run(
+                command,
+                cwd=subdirectory,
+                shell=True,
+                input=json.dumps(
+                    {
+                        "session_id": "generated-root",
+                        "hook_event_name": "PreToolUse",
+                        "tool_name": "Bash",
+                        "tool_input": {"command": "sudo rm -rf /"},
+                    }
+                ),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(hook_result.returncode, 0, hook_result.stderr)
+            self.assertEqual(
+                json.loads(hook_result.stdout)["hookSpecificOutput"]["permissionDecision"],
+                "deny",
+            )
 
             receipt = yaml.safe_load(
                 (destination / ".agent-harness" / "installation.yaml").read_text()
@@ -94,6 +122,9 @@ class InitializerTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             hooks = json.loads((destination / ".agents" / "hooks.json").read_text())
             self.assertIn("agent-harness-guardrails", hooks)
+            guardrails = hooks["agent-harness-guardrails"]
+            self.assertIn("--event PreInvocation", guardrails["PreInvocation"][0]["command"])
+            self.assertIn("--event PreToolUse", guardrails["PreToolUse"][0]["hooks"][0]["command"])
             mcp = json.loads((destination / ".agents" / "mcp_config.json").read_text())
             self.assertEqual(
                 mcp["mcpServers"]["geminiDocs"],

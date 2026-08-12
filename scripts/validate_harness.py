@@ -81,11 +81,20 @@ def main() -> int:
         "config/persona.yaml",
         "config/policies.yaml",
         "config/capabilities.yaml",
-        "scripts/host_guardrail.py",
+        "scripts/guardrails/core.py",
+        "scripts/guardrails/codex.py",
+        "scripts/guardrails/claude_code.py",
+        "scripts/guardrails/antigravity.py",
     )
     for relative in required:
         if not (ROOT / relative).is_file():
             errors.append(f"Missing required file: {relative}")
+
+    try:
+        policy_text = (ROOT / "config" / "policies.yaml").read_text(encoding="utf-8")
+        json.loads(policy_text)
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"config/policies.yaml must remain JSON-compatible YAML: {exc}")
 
     try:
         receipt = _load_yaml(receipt_path)

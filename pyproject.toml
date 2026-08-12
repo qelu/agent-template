@@ -1,5 +1,5 @@
 [project]
-name = "agent-template-placeholder"
+name = "agent-template"
 version = "0.1.0"
 description = "Host-native agent harness template for Codex, Claude Code, and Antigravity"
 readme = "README.md"
@@ -24,6 +24,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+explicit_package_bases = true
 
 [tool.ruff]
 line-length = 100

@@ -11,6 +11,7 @@ import yaml
 from harness.initializer import (
     InitializationSpec,
     InitializerError,
+    capability_choices,
     execute_plan,
     provision_and_validate,
     resolve_plan,
@@ -75,6 +76,23 @@ class InitializerCoreTests(unittest.TestCase):
                     self.root, self.spec(Path(temporary) / "agent", capabilities=("imaginary",))
                 )
 
+    def test_initializer_does_not_offer_inactive_capabilities(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary)
+            (source / "config").mkdir()
+            (source / "config" / "initializer.yaml").write_text(
+                "version: '1.0'\nrequired_capabilities: []\ndefaults:\n"
+                "  host: portable\n  python: '3.13'\n"
+                "  development_tools: true\n  security_tools: false\n"
+            )
+            (source / "config" / "capabilities.yaml").write_text(
+                "version: '3.0'\ncapabilities:\n"
+                "  - id: inactive\n    type: skill\n    status: proposed\n"
+                "    description: Proposed test capability.\n"
+                "    hosts: [portable]\n    requires: []\n"
+            )
+            self.assertEqual(capability_choices(source), ())
+
     def test_missing_host_install_is_explicit_and_uses_official_package(self) -> None:
         def find(command: str) -> str | None:
             return None if command == "claude" else f"/tools/{command}"
@@ -98,6 +116,8 @@ class InitializerCoreTests(unittest.TestCase):
 
             self.assertTrue((destination / "CLAUDE.md").is_file())
             self.assertTrue((destination / ".claude" / "settings.json").is_file())
+            self.assertTrue((destination / ".git").is_dir())
+            self.assertTrue((destination / "scripts" / "guardrails" / "claude_code.py").is_file())
             self.assertTrue((destination / ".claude" / "skills" / "task-planning").is_dir())
             self.assertTrue((destination / ".claude" / "skills" / "safe-tool-use").is_dir())
             self.assertFalse((destination / ".claude" / "skills" / "evidence-gathering").exists())

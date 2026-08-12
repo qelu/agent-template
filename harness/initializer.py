@@ -159,10 +159,18 @@ def capability_choices(source: Path) -> tuple[CapabilityChoice, ...]:
         raise InitializerError(
             "Initializer requires unknown capabilities: " + ", ".join(unknown_required)
         )
+    inactive_required = sorted(
+        required - {str(item["id"]) for item in capabilities if item.get("status") == "active"}
+    )
+    if inactive_required:
+        raise InitializerError(
+            "Initializer requires inactive capabilities: " + ", ".join(inactive_required)
+        )
     choices: list[CapabilityChoice] = []
     for item in capabilities:
-        compatibility = item.get("compatibility", {})
-        hosts = compatibility.get("hosts", HOSTS) if isinstance(compatibility, dict) else HOSTS
+        if item.get("status") != "active":
+            continue
+        hosts = item.get("hosts", HOSTS)
         hosts = [HOST_ALIASES.get(str(value), str(value)) for value in hosts]
         choices.append(
             CapabilityChoice(
@@ -313,6 +321,7 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
         unresolved = unresolved_placeholders(staging)
         if unresolved:
             raise InitializerError("Unresolved placeholders: " + ", ".join(unresolved))
+        _run(["git", "init", "--quiet"], cwd=staging)
         os.replace(staging, destination)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
@@ -334,12 +343,16 @@ def copy_host_native_template(source: Path, destination: Path, plan: Installatio
         "agent/AGENT.md",
         "config/persona.yaml",
         "config/policies.yaml",
-        "scripts/host_guardrail.py",
         "scripts/validate_harness.py",
         "templates/adr-template.md",
         "templates/runbook-template.md",
     ):
         _copy_file(source, destination, relative)
+    shutil.copytree(
+        source / "scripts" / "guardrails",
+        destination / "scripts" / "guardrails",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
     (destination / "pyproject.toml").write_text(
         (source / "templates" / "generated-pyproject.toml").read_text(encoding="utf-8"),
         encoding="utf-8",
@@ -408,15 +421,17 @@ def select_capabilities(destination: Path, selected: set[str]) -> None:
     write_yaml(registry_path, registry)
 
 
-def _hook_command(host: str) -> str:
+def _hook_command(host: str, event: str | None = None) -> str:
+    script = host.replace("-", "_")
+    event_argument = f" --event {event}" if event else ""
     return (
-        'python3 "$(git rev-parse --show-toplevel)/scripts/host_guardrail.py" '
-        f'--host {host} --root "$(git rev-parse --show-toplevel)"'
+        f'python3 "$(git rev-parse --show-toplevel)/scripts/guardrails/{script}.py" '
+        f'--root "$(git rev-parse --show-toplevel)"{event_argument}'
     )
 
 
-def _hook_handler(host: str) -> dict[str, object]:
-    return {"type": "command", "command": _hook_command(host), "timeout": 10}
+def _hook_handler(host: str, event: str | None = None) -> dict[str, object]:
+    return {"type": "command", "command": _hook_command(host, event), "timeout": 10}
 
 
 def write_host_profile(destination: Path, host: str, provider: str) -> None:
@@ -482,8 +497,8 @@ def write_host_profile(destination: Path, host: str, provider: str) -> None:
         agents.mkdir(exist_ok=True)
         hooks = {
             "agent-harness-guardrails": {
-                "PreInvocation": [_hook_handler(host)],
-                "PreToolUse": [{"matcher": "*", "hooks": [_hook_handler(host)]}],
+                "PreInvocation": [_hook_handler(host, "PreInvocation")],
+                "PreToolUse": [{"matcher": "*", "hooks": [_hook_handler(host, "PreToolUse")]}],
             }
         }
         (agents / "hooks.json").write_text(json.dumps(hooks, indent=2) + "\n", encoding="utf-8")

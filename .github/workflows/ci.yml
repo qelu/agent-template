@@ -39,3 +39,5 @@ jobs:
         run: uv run python -m unittest discover -s tests -v
       - name: Lint
         run: uv run ruff check .
+      - name: Type check
+        run: uv run mypy harness scripts tests

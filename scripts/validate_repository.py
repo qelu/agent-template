@@ -48,7 +48,10 @@ REQUIRED = (
     "harness/initializer.py",
     "harness/policy.py",
     "harness/registry.py",
-    "scripts/host_guardrail.py",
+    "scripts/guardrails/core.py",
+    "scripts/guardrails/codex.py",
+    "scripts/guardrails/claude_code.py",
+    "scripts/guardrails/antigravity.py",
     "scripts/initialize_agent.py",
     "scripts/validate_harness.py",
     "scripts/validate_repository.py",
@@ -99,6 +102,11 @@ def main() -> int:
             load_yaml(ROOT / relative)
         except ConfigurationError as exc:
             errors.append(str(exc))
+
+    try:
+        json.loads((ROOT / "config" / "policies.yaml").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"config/policies.yaml must remain JSON-compatible YAML: {exc}")
 
     try:
         initializer = load_initializer_config(ROOT)

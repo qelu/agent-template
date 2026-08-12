@@ -18,10 +18,11 @@ the project follows Semantic Versioning.
 - Structured bug and feature issue forms plus community conduct guidance.
 - Native Codex, Claude Code, and Antigravity project profiles with permissions,
   hooks, skill locations, and documentation integrations.
-- A shared native guardrail hook that normalizes host sessions into run IDs,
-  records redacted audit metadata, and blocks deterministic destructive or
-  credential-path operations.
-- Host-profile conformance tests and generated-project validation.
+- Host-specific guardrail bridges backed by one portable policy,
+  redacted run-aware audit metadata, and deterministic destructive or
+  credential-path denials.
+- Official-shaped hook protocol fixtures, host-profile conformance tests, and
+  generated-project validation.
 
 ### Changed
 
@@ -31,6 +32,8 @@ the project follows Semantic Versioning.
   `gemini-cli` as an initializer compatibility alias.
 - Simplified generated projects to contain only portable policy, selected
   capabilities, native host configuration, guardrails, and validation tools.
+- Replaced the multi-actor capability attestation state machine with a concise
+  Git-reviewed registry of status, compatibility, dependencies, and evaluations.
 
 ### Removed
 

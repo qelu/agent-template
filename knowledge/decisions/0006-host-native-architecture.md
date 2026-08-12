@@ -22,8 +22,9 @@ Host profiles map that layer to native instruction files, permissions, hooks,
 skills, and MCP configuration.
 
 Native hook metadata supplies the run identity. Codex and Claude Code session
-IDs and Antigravity conversation IDs are normalized as harness run IDs. The
-shared hook records redacted metadata and enforces deterministic safety denials.
+IDs and Antigravity conversation IDs are normalized as harness run IDs. Host-specific
+protocol bridges share one policy evaluator, record redacted metadata, and enforce
+deterministic safety denials without assuming a common event schema.
 
 Exact semantic plan approval remains a behavioral contract unless a host exposes
 a stable, trustworthy approval event. Native tool approval remains mechanically

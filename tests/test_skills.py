@@ -19,6 +19,7 @@ class SkillContractTests(unittest.TestCase):
                 text = path.read_text(encoding="utf-8")
                 match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
                 self.assertIsNotNone(match)
+                assert match is not None
                 metadata = yaml.safe_load(match.group(1))
                 self.assertEqual(set(metadata), {"name", "description"})
                 self.assertEqual(metadata["name"], skill["id"])

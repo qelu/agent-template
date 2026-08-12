@@ -87,16 +87,13 @@ def scaffold_capability(capability_type: str, extension_id: str, name: str) -> P
     )
     capabilities.append(
         proposed_capability(
-            ROOT,
             capability_id=extension_id,
             capability_type=capability_type,
             version="0.1.0",
             path=str(destination.relative_to(ROOT)),
             description=f"Proposed capability for {name}.",
             risk_level=risk_level,
-            owner="human",
-            actor="human:extension-scaffolder",
-            evaluation_suite=str(suite.relative_to(ROOT)),
+            evaluation=str(suite.relative_to(ROOT)),
         )
     )
     registry_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")

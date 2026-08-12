@@ -45,12 +45,12 @@ flowchart LR
 | Host-native safety | Codex sandbox/approval settings, Claude Code permissions, and Antigravity hooks. |
 | Run identity | Native session or conversation IDs are normalized as harness run IDs. |
 | Approval boundaries | Plans are exact-scope and never grant conversation-wide authority; native tool approvals remain separate. |
-| Hard safety checks | A shared pre-tool hook blocks destructive root/device commands and sensitive credential paths. |
+| Hard safety checks | Host-specific pre-tool bridges apply one portable policy to destructive commands and sensitive paths. |
 | Privacy-conscious audit | Hook events record hashes and metadata, never prompts, arguments, or secrets. |
 | Capability selection | Install only the requested skills, runbooks, workflows, hooks, validators, and MCP servers. |
 | Current documentation | Add provider-appropriate official documentation access in the host's native format. |
 | Transactional setup | Build and validate in a temporary sibling, then publish the destination atomically. |
-| Drift detection | The source capability registry binds versions to artifacts, evaluation, and activation evidence. |
+| Capability validation | The source registry validates artifacts, evaluations, host compatibility, and dependencies. |
 
 ## Guardrail boundary
 
@@ -58,7 +58,7 @@ The harness deliberately uses two kinds of guardrails:
 
 - **Mechanically enforced:** host sandbox and permission controls, pre-tool hook
   denials, sensitive-path protection, transactional generation, schema checks,
-  and capability drift validation.
+  and capability validation.
 - **Behaviorally governed:** when a task requires a plan, what a plan contains,
   and the rule that an approval applies only to the exact plan presented.
 
@@ -67,6 +67,10 @@ turn and is also part of the canonical contract for every host. A project-level
 template cannot cryptographically prove that a human approved a semantic plan
 unless the host exposes that approval as a stable hook event. The repository does
 not claim that guarantee where the host does not provide it.
+
+`config/policies.yaml` is intentionally written in the JSON-compatible subset of
+YAML. Host hooks can therefore consume the same source directly with the Python
+standard library; there is no generated policy copy that can drift.
 
 ## Supported hosts
 
@@ -135,7 +139,7 @@ agent/AGENT.md                     portable behavioral contract
 config/persona.yaml                identity, goal, language, and tone
 config/policies.yaml               portable authority and safety intent
 config/capabilities.yaml           selected capability manifest
-scripts/host_guardrail.py          native hook safety and run metadata
+scripts/guardrails/                shared policy evaluator plus one bridge per host
 scripts/validate_harness.py        generated-project conformance check
 <host-native files>                instructions, permissions, hooks, MCP
 <host-native skills directory>     only selected skills
@@ -151,7 +155,7 @@ The host's own session identifier is the run ID:
 - Codex and Claude Code provide `session_id` to hooks.
 - Antigravity provides `conversationId`.
 
-The guardrail hook writes redacted JSONL metadata under
+The host bridge writes redacted JSONL metadata under
 `.agent-harness/audit/<run-id>.jsonl`; that directory is ignored by Git. The
 hook never stores raw prompts or tool arguments.
 
@@ -189,7 +193,7 @@ workspace.
 `task-planning` and `safe-tool-use` are required. Optional packaged capabilities
 currently include `evidence-gathering` and `documentation-maintenance`.
 
-Create another governed capability in the source template with:
+Create another capability in the source template with:
 
 ```bash
 uv run python scripts/create_extension.py \
@@ -198,17 +202,16 @@ uv run python scripts/create_extension.py \
   --name "Summarize Evidence"
 ```
 
-The scaffold begins inactive with a failing evaluation. Use
-`scripts/manage_capability.py test <capability-id>` after implementing its
-behavioral evaluation. Activation is intentionally absent from that CLI: bind
-`CapabilityLifecycle.activate` to a trusted human approval surface instead of
-making activation model-callable.
+The scaffold begins as `proposed` with a failing behavioral evaluation. Implement
+and run that evaluation, then promote the registry entry to `active` in the same
+reviewed change. Git supplies the change and approval history; teams that need
+external attestations can add them as an optional governance capability.
 
 ## Security notes
 
 - Native project settings cannot override organization-managed host policy.
 - Users must trust project-local hooks before some hosts will execute them.
-- The hook is defense in depth, not a replacement for the host sandbox.
+- Host bridges are defense in depth, not replacements for native sandboxing and permissions.
 - Antigravity CLI defaults unconfigured sensitive actions to Ask; its project
   hook adds deterministic denials and audit metadata.
 - Never commit `.env` files, keys, tokens, credentials, or audit state.
@@ -224,9 +227,9 @@ uv run ruff check .
 git diff --check
 ```
 
-Tests cover all generated host profiles, native configuration locations,
-initializer transactions, capability governance, run-ID normalization,
-redacted auditing, destructive-command denial, and sensitive-path denial.
+Tests cover official-shaped event fixtures for every host, generated native
+configuration, initializer transactions, capability validation, run-ID
+normalization, redacted auditing, destructive-command denial, and sensitive-path denial.
 
 ## Repository layout
 

@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "agent-template-placeholder"
+name = "agent-template"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
