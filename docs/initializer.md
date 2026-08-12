@@ -44,8 +44,9 @@ documented by Google.
 ## Guardrails generated for every concrete host
 
 - One canonical agent contract with exact-scope plan approval semantics.
-- A fresh reminder on supported user-prompt hooks that prior plan approval never
-  grants conversation-wide authority.
+- A fresh reminder through `UserPromptSubmit` on Codex and Claude Code or
+  `PreInvocation` on Antigravity that prior plan approval never grants
+  conversation-wide authority.
 - Native sandbox and permission defaults where project-scoped settings exist.
 - One portable decision policy: reads inside allowed paths are allowed, writes
   inside allowed paths ask, and deletions are denied.
@@ -54,9 +55,35 @@ documented by Google.
 - Redacted audit metadata keyed by the host's session/conversation identifier.
 - Native documentation MCP or documentation skill configuration.
 
+The portable configuration copied into every generated project is:
+
+- `config/persona.yaml` for identity, goal, language, and tone;
+- `config/policies.yaml` for action decisions, allowed paths, denied paths, shell
+  denials, and audit enablement;
+- `config/capabilities.yaml` for the selected discovery manifest.
+
+`agent/AGENT.md` remains the separate, stable contract. The generated root host
+file only directs the selected host to that contract, while native settings and
+`scripts/guardrails/*.py` form the enforcement layer.
+
 The hook records hashes, host, event, run ID, turn ID, tool name, and outcome. It
 does not store prompt or argument content. Audit files live under
 `.agent-harness/audit/` and are ignored by Git.
+
+The native translation is host-specific:
+
+| Portable decision | Claude Code | Antigravity | Codex |
+| --- | --- | --- | --- |
+| `allow` | `PreToolUse` returns `allow` | `PreToolUse` returns `allow` | Hook exits without tightening native controls. |
+| `ask` | `PreToolUse` returns `ask` | `PreToolUse` returns `ask` | The generated read-only sandbox and `on-request` approval flow prompt natively. |
+| `deny` | `PreToolUse` returns `deny` | `PreToolUse` returns `deny` | `PreToolUse` returns `deny`. |
+
+The policy file is JSON-compatible YAML so all three dependency-free hook
+bridges can read it with Python's standard library. Its strict parser rejects
+missing fields, unknown fields, invalid decisions, duplicate entries, and any
+attempt to weaken deletion from `deny`. Repository validation and generated
+harness validation call that same parser; there is no separate policy schema
+with potentially different behavior.
 
 Plan approval and native tool approval are deliberately separate. The former is
 a semantic agreement about scope; the latter is enforced by the host before a
@@ -92,6 +119,10 @@ directory:
 
 Generated projects receive only the selected discovery entries: ID, type,
 status, path, description, and the `when` trigger.
+
+The permitted states are `active`, `experimental`, and `disabled`. Only active
+capabilities are offered by the initializer. Tests remain ordinary repository
+tests instead of fields in the capability manifest.
 
 ## Installation scope
 

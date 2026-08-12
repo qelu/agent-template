@@ -31,10 +31,12 @@ configuration surface:
 ```mermaid
 flowchart LR
     U["User request"] --> H["Codex / Claude Code / Antigravity"]
-    C["Portable contract + selected capabilities"] --> H
-    N["Native permissions + hooks"] --> H
-    H --> T["Host tools and sandbox"]
-    T --> A["Run-aware audit metadata"]
+    C["Contract + declarative configuration"] --> H
+    H --> G["Host-native pre-tool bridge"]
+    P["Portable allow / ask / deny policy"] --> G
+    G --> N["Native permission or denial"]
+    N --> T["Host tools and sandbox"]
+    G --> A["Redacted run-aware audit metadata"]
 ```
 
 ## What the harness provides
@@ -62,11 +64,12 @@ The harness deliberately uses two kinds of guardrails:
 - **Behaviorally governed:** when a task requires a plan, what a plan contains,
   and the rule that an approval applies only to the exact plan presented.
 
-The second category is injected on every supported Codex and Claude Code user
-turn and is also part of the canonical contract for every host. A project-level
-template cannot cryptographically prove that a human approved a semantic plan
-unless the host exposes that approval as a stable hook event. The repository does
-not claim that guarantee where the host does not provide it.
+The second category is injected through `UserPromptSubmit` for Codex and Claude
+Code and through `PreInvocation` for Antigravity. It is also part of the canonical
+contract for every host. A project-level template cannot cryptographically prove
+that a human approved a semantic plan unless the host exposes that approval as a
+stable hook event. The repository does not claim that guarantee where the host
+does not provide it.
 
 `config/policies.yaml` is intentionally written in the JSON-compatible subset of
 YAML. Host hooks can therefore consume the same source directly with the Python
@@ -77,6 +80,32 @@ The portable policy is deliberately small: read actions are allowed inside
 always denied. `denied_paths` overrides both allowed lists. Unknown actions ask.
 The same strict parser runs in repository validation, generated-project
 validation, and every host hook; malformed or unknown policy fields fail closed.
+
+The three layers remain independent:
+
+| Layer | Source | Responsibility |
+| --- | --- | --- |
+| Contract | `agent/AGENT.md` | Stable operating principles, authority, and instruction precedence. |
+| Configuration | `config/persona.yaml`, `config/policies.yaml`, `config/capabilities.yaml` | Declarative identity, action policy, path scope, and capability discovery. |
+| Enforcement | Native host settings plus `scripts/guardrails/*.py` | Parse native events and mechanically apply the portable policy. |
+
+The root `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` files generated for a host are
+entry points to the canonical contract, not additional contract sources.
+
+### Portable action decisions
+
+| Action | Default | Scope behavior |
+| --- | --- | --- |
+| Read | `allow` | Only within `allowed_read_paths`; `denied_paths` still blocks. |
+| Write | `ask` | Only within `allowed_write_paths`; outside scope is denied. |
+| Delete | `deny` | Cannot be authorized by a chat or native permission prompt. |
+| External side effect | `ask` | Continues through the host's native permission flow. |
+| Unknown | `ask` | Conservative fallback when the evaluator cannot prove an action is read-only. |
+
+Claude Code and Antigravity can return all three decisions directly from
+`PreToolUse`. Codex's `PreToolUse` bridge returns hard denials; its generated
+`read-only` sandbox with `approval_policy = "on-request"` supplies the native
+confirmation boundary for writes and other actions classified as `ask`.
 
 ## Supported hosts
 
@@ -185,7 +214,7 @@ harness applies several layers:
    requests containing file-deletion directives.
 4. Codex's `read-only` sandbox sends write attempts through its native approval
    boundary; the hook independently denies deletions and path-scope violations.
-5. The observed or denied event is appended to the run's redacted audit log.
+5. The policy outcome is appended to the run's redacted audit log.
 
 The run ID correlates events; it is not an authorization token. Shell
 classification is deterministic and intentionally conservative: unknown commands
@@ -229,6 +258,8 @@ Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 uv run python scripts/validate_repository.py
 uv run python -m unittest discover -s tests -v
 uv run ruff check .
+uv run mypy harness scripts tests
+uv lock --check
 git diff --check
 ```
 
