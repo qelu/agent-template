@@ -108,6 +108,24 @@ class HostGuardrailTests(unittest.TestCase):
             denied = self.invoke(root, "claude_code", "Read", {"file_path": str(root / ".env")})
             self.assertEqual(self.decision(denied, "claude_code"), "deny")
 
+    def test_denied_paths_remain_denied_in_allowed_external_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            external = parent / "external-project"
+            external.mkdir()
+            policy = json.loads(json.dumps(POLICY))
+            policy["scope"]["allowed_read_paths"].append(str(external))
+            harness = parent / "harness"
+            harness.mkdir()
+            root = self.root(str(harness), policy)
+
+            source = self.invoke(
+                root, "claude_code", "Read", {"file_path": str(external / "src" / "app.py")}
+            )
+            secret = self.invoke(root, "claude_code", "Read", {"file_path": str(external / ".env")})
+            self.assertEqual(self.decision(source, "claude_code"), "allow")
+            self.assertEqual(self.decision(secret, "claude_code"), "deny")
+
     def test_shell_reads_are_scoped_and_unknown_commands_ask(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = self.root(temporary)

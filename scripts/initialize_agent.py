@@ -23,6 +23,7 @@ from harness.initializer import (  # noqa: E402
     InstallationPlan,
     InitializerError,
     capability_choices,
+    destination_error,
     execute_plan,
     load_initializer_config,
     resolve_plan,
@@ -39,10 +40,17 @@ ASCII_ART = r"""
 """
 
 HOST_LABELS = {
-    "portable": "Portable — no host-specific entry point",
-    "codex": "Codex",
-    "claude-code": "Claude Code",
-    "antigravity": "Antigravity CLI / Gemini CLI",
+    "portable": "Portable — shared files only; configure a host later",
+    "codex": "Codex — AGENTS.md, Codex sandbox settings, hooks, and skills",
+    "claude-code": "Claude Code — CLAUDE.md, permissions, hooks, and skills",
+    "antigravity": "Antigravity — AGENTS.md, GEMINI.md, hooks, and skills",
+}
+
+DOCUMENTATION_PROVIDER_LABELS = {
+    "none": "None — do not add an official documentation integration",
+    "openai": "OpenAI — connect the official OpenAI developer-docs MCP server",
+    "anthropic": "Anthropic — add a skill for current official Claude documentation",
+    "gemini": "Gemini — connect the official Gemini documentation MCP server",
 }
 
 
@@ -133,13 +141,46 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
     console.print("Build a portable, least-authority agent harness.\n", style="dim")
     defaults = load_initializer_config(source)["defaults"]
 
-    destination = _ask(questionary.text("Destination", default="../my-agent"))
-    name = _ask(questionary.text("Agent name"))
-    agent_id = _ask(questionary.text("Agent ID", default=slug(name)))
-    goal = _ask(questionary.text("Primary goal"))
-    role = _ask(questionary.text("Agent role", default="assistant"))
-    tone = _ask(questionary.text("Communication tone", default="clear and concise"))
-    language = _ask(questionary.text("Language", default="en-US"))
+    console.print("[bold cyan]Project location[/bold cyan]")
+    console.print(
+        "Choose a new folder or an existing empty folder. Non-empty folders are never overwritten.",
+        style="dim",
+    )
+    destination = _ask(
+        questionary.path(
+            "Destination folder",
+            default="../my-agent",
+            validate=lambda value: destination_error(source, Path(value)) or True,
+        )
+    )
+
+    console.print("\n[bold cyan]Identity and persona[/bold cyan]")
+    console.print(
+        "These answers become config/persona.yaml: who the agent is, what it should accomplish, "
+        "and how it should communicate.",
+        style="dim",
+    )
+    name = _ask(questionary.text("Display name — shown in generated documentation"))
+    agent_id = _ask(questionary.text("Agent ID — stable lowercase identifier", default=slug(name)))
+    goal = _ask(questionary.text("Primary goal — the outcome this persona is responsible for"))
+    role = _ask(
+        questionary.text(
+            "Persona role — identity, expertise, and working stance", default="assistant"
+        )
+    )
+    tone = _ask(
+        questionary.text(
+            "Communication tone — preferred response style", default="clear and concise"
+        )
+    )
+    language = _ask(questionary.text("Language/locale — for example en-US", default="en-US"))
+
+    console.print("\n[bold cyan]Host and documentation[/bold cyan]")
+    console.print(
+        "The host runs the agent. The documentation integration gives it current, official "
+        "provider references.",
+        style="dim",
+    )
     host = _ask(
         questionary.select(
             "Host",
@@ -152,7 +193,7 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
         questionary.select(
             "Official documentation integration",
             choices=[
-                Choice(value.replace("-", " ").title(), value=value)
+                Choice(DOCUMENTATION_PROVIDER_LABELS[value], value=value)
                 for value in DOCUMENTATION_PROVIDERS
             ],
             default=docs_default,
@@ -163,7 +204,9 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
     optional_choices = [choice for choice in choices if not choice.required]
     console.print("\nRequired capabilities", style="bold cyan")
     for choice in required_choices:
-        console.print(f"  [green]✓[/green] {choice.capability_id} [dim](locked)[/dim]")
+        console.print(
+            f"  [green]✓[/green] {choice.capability_id} [dim](locked) — {choice.description}[/dim]"
+        )
     selected_optional: list[str] = []
     for capability_type in sorted({choice.capability_type for choice in optional_choices}):
         typed_choices = [
@@ -185,21 +228,56 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
             )
         )
     selected = tuple([choice.capability_id for choice in required_choices] + selected_optional)
+    console.print("\n[bold cyan]Environment and validation[/bold cyan]")
+    console.print(
+        "Provisioning creates a project-local .venv; it never replaces system Python.",
+        style="dim",
+    )
     python_version = _ask(
-        questionary.select("Python", choices=["3.13", "3.12", "3.11"], default=defaults["python"])
+        questionary.select(
+            "Python version for the generated .venv",
+            choices=[
+                Choice("3.13 — newest supported version", value="3.13"),
+                Choice("3.12 — compatibility option", value="3.12"),
+                Choice("3.11 — oldest supported version", value="3.11"),
+            ],
+            default=defaults["python"],
+        )
     )
     install_dependencies = _ask(
-        questionary.confirm("Create the uv environment and validate everything?", default=True)
+        questionary.confirm(
+            "Create the .venv, install selected packages, and validate the harness?", default=True
+        )
     )
     development_tools = _ask(
         questionary.confirm(
-            "Install Ruff, pytest, mypy, and pre-commit?",
+            "Include development tools (formatting, tests, type checks, and pre-commit hooks)?",
             default=defaults["development_tools"],
         )
     )
-    security_tools = _ask(
-        questionary.confirm("Run Gitleaks validation?", default=defaults["security_tools"])
-    )
+    gitleaks_available = shutil.which("gitleaks") is not None
+    brew_can_install_gitleaks = sys.platform == "darwin" and shutil.which("brew") is not None
+    if gitleaks_available:
+        security_tools = _ask(
+            questionary.confirm(
+                "Scan the generated files for committed secrets with Gitleaks?",
+                default=defaults["security_tools"],
+            )
+        )
+    elif brew_can_install_gitleaks:
+        security_tools = _ask(
+            questionary.confirm(
+                "Gitleaks is missing. Install it with Homebrew, then scan for secrets?",
+                default=False,
+            )
+        )
+    else:
+        security_tools = False
+        console.print(
+            "Gitleaks scan unavailable: `gitleaks` is not on PATH. Install it from "
+            "https://github.com/gitleaks/gitleaks and rerun the wizard to enable secret scanning.",
+            style="yellow",
+        )
     install_host_tool = False
     host_binary = {"codex": "codex", "claude-code": "claude", "antigravity": "agy"}.get(host)
     if host_binary:
@@ -288,11 +366,26 @@ def show_plan(plan: InstallationPlan, *, interactive: bool, no_color: bool) -> b
 
 
 def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
+    capabilities = "\n".join(
+        (
+            "What this harness can do:",
+            "  • Follow the configured identity, goal, role, language, and tone.",
+            "  • Plan and execute work through explicit allow / ask / deny boundaries.",
+            "  • Use selected skills and official documentation integrations.",
+            "  • Protect denied paths and record redacted audit metadata.",
+            "  • Add project folders through the manage-project-scope skill.",
+            "  • Map short slash commands to installed skills with map-skill-command.",
+        )
+    )
     try:
         from rich.console import Console
         from rich.panel import Panel
     except ImportError:
-        print(f"Created agent harness at {plan.spec.destination}")
+        print(f"Created agent harness at {plan.spec.destination}\n\n{capabilities}")
+        print(
+            '\nTo add a project, ask: "Add /path/to/project to this harness with read-write access."'
+        )
+        print('To map a command, ask: "Map /scope to the manage-project-scope skill."')
         return
     console = Console(no_color=no_color)
     next_steps = [f"cd {shlex.quote(str(plan.spec.destination))}"]
@@ -307,7 +400,13 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
             )
     console.print(
         Panel(
-            "Harness created successfully.\n\n" + "\n".join(f"  {step}" for step in next_steps),
+            "Harness created successfully.\n\n"
+            + capabilities
+            + "\n\nNext steps:\n"
+            + "\n".join(f"  {step}" for step in next_steps)
+            + '\n\nAdd a project folder by asking:\n  "Add /path/to/project to this harness '
+            'with read-write access."\n  The skill updates config/policies.yaml safely.'
+            + '\n\nMap a command by asking:\n  "Map /scope to the manage-project-scope skill."',
             title="Ready",
             border_style="green",
         )

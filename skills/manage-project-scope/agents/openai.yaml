@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Project Scope"
+  short_description: "Add project folders to harness scope."
+  default_prompt: "Use $manage-project-scope to add a project folder to this harness with the appropriate access."
