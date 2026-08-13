@@ -19,6 +19,7 @@ from harness.initializer import (
     select_capabilities,
     unresolved_placeholders,
 )
+from scripts.initialize_agent import host_cli_unavailable_message
 
 
 class InitializerCoreTests(unittest.TestCase):
@@ -138,6 +139,13 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertEqual(
             plan.external_commands, (("npm", "install", "-g", "@anthropic-ai/claude-code"),)
         )
+
+    def test_codex_cli_notice_distinguishes_desktop_app_from_path_check(self) -> None:
+        message = host_cli_unavailable_message("codex", "codex")
+
+        self.assertIn("CLI command (`codex`)", message)
+        self.assertIn("shell's PATH", message)
+        self.assertIn("desktop app may still be installed", message)
 
     def test_missing_gitleaks_plans_homebrew_install_on_macos(self) -> None:
         def find(command: str) -> str | None:
