@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/qelu/agent-template/actions/workflows/ci.yml/badge.svg)](https://github.com/qelu/agent-template/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-v0.1.0-7C3AED)
+![Version](https://img.shields.io/badge/version-v1.0.0-7C3AED)
 [![License](https://img.shields.io/badge/license-Apache--2.0-0EA5E9)](LICENSE)
 
 Install a lean, governed agent workspace without replacing the host's model runtime.

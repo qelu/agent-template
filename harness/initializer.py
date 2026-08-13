@@ -359,6 +359,7 @@ def copy_host_native_template(source: Path, destination: Path, plan: Installatio
         "agent/AGENT.md",
         "config/persona.yaml",
         "config/policies.yaml",
+        "scripts/update_scope.py",
         "scripts/validate_harness.py",
         "templates/adr-template.md",
         "templates/runbook-template.md",

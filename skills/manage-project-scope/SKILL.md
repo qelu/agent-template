@@ -15,20 +15,20 @@ description: Add an existing project folder to or inspect a generated agent harn
    - ask which one is intended when the request does not establish it.
 4. Present the exact path and access level before changing policy. Treat this edit as a scope
    expansion that requires the host's normal write approval.
-5. Read `config/capabilities.yaml`, find the `manage-project-scope` entry, and resolve its
-   registered `path` against the harness root. Run the bundled helper from that skill directory
-   by absolute path:
+5. From the harness root, run the stable project-level launcher. This command works unchanged on
+   Linux and macOS and for Codex, Claude Code, Antigravity, and portable harnesses:
 
    ```bash
-   python3 "/path/to/harness/<registered-skill-path>/scripts/update_scope.py" \
+   python3 scripts/update_scope.py \
      --root "/path/to/harness" --path "/path/to/project" --access read
    ```
 
-   For example, the registered path is normally
-   `.agents/skills/manage-project-scope` for Codex, Antigravity, and portable harnesses, and
-   `.claude/skills/manage-project-scope` for Claude Code. Treat the registry as authoritative.
-   Do not run `/path/to/harness/scripts/update_scope.py`; that project-level file does not exist.
-   Use `--access read-write` when write access was explicitly established.
+   The launcher resolves the bundled helper from the host-native skill directory. Use
+   `--access read-write` when write access was explicitly established. If an older harness does
+   not have the launcher, read the `manage-project-scope` entry in `config/capabilities.yaml`,
+   resolve its registered `path` against the harness root, and run
+   `<registered-skill-path>/scripts/update_scope.py` by absolute path. Do not invent or shorten
+   another helper path.
 6. Validate the result with `python3 scripts/validate_harness.py`. If project dependencies are
    available only through uv, use `uv run python scripts/validate_harness.py` instead.
 7. Report the resulting read and write scope and remind the user that `denied_paths` still wins.

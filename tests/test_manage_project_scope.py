@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,10 @@ class ManageProjectScopeTests(unittest.TestCase):
     def script(self) -> Path:
         return self.root / "skills" / "manage-project-scope" / "scripts" / "update_scope.py"
 
+    @property
+    def launcher(self) -> Path:
+        return self.root / "scripts" / "update_scope.py"
+
     def harness(self, parent: Path) -> Path:
         harness = parent / "harness"
         config = harness / "config"
@@ -22,6 +27,10 @@ class ManageProjectScopeTests(unittest.TestCase):
         (config / "policies.yaml").write_text(
             (self.root / "config" / "policies.yaml").read_text(encoding="utf-8"),
             encoding="utf-8",
+        )
+        shutil.copytree(
+            self.root / "skills" / "manage-project-scope",
+            harness / ".agents" / "skills" / "manage-project-scope",
         )
         return harness
 
@@ -41,15 +50,38 @@ class ManageProjectScopeTests(unittest.TestCase):
             text=True,
         )
 
-    def test_skill_invokes_bundled_helper_instead_of_project_scripts(self) -> None:
+    def test_skill_uses_host_independent_project_launcher(self) -> None:
         instructions = (self.script.parent.parent / "SKILL.md").read_text(encoding="utf-8")
 
+        self.assertIn("python3 scripts/update_scope.py", instructions)
         self.assertIn("<registered-skill-path>/scripts/update_scope.py", instructions)
-        self.assertIn("Treat the registry as authoritative", instructions)
-        self.assertIn(
-            "Do not run `/path/to/harness/scripts/update_scope.py`",
-            instructions,
-        )
+
+    def test_project_launcher_resolves_antigravity_skill_on_linux_style_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            harness = self.harness(parent)
+            project = parent / "customer-project"
+            project.mkdir()
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.launcher),
+                    "--root",
+                    str(harness),
+                    "--path",
+                    str(project),
+                    "--access",
+                    "read",
+                ],
+                cwd=harness,
+                capture_output=True,
+                text=True,
+            )
+            policy = json.loads((harness / "config" / "policies.yaml").read_text())
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(str(project.resolve()), policy["scope"]["allowed_read_paths"])
 
     def test_adds_canonical_read_write_scope_and_preserves_denials(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
