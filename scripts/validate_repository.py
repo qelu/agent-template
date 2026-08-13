@@ -51,6 +51,7 @@ REQUIRED = (
     "scripts/guardrails/claude_code.py",
     "scripts/guardrails/antigravity.py",
     "scripts/initialize_agent.py",
+    "scripts/update_scope.py",
     "scripts/validate_harness.py",
     "scripts/validate_repository.py",
     "templates/generated-pyproject.toml",

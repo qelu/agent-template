@@ -24,6 +24,7 @@ class InitializerTests(unittest.TestCase):
             self.assertTrue((destination / ".codex" / "config.toml").is_file())
             self.assertTrue((destination / ".codex" / "hooks.json").is_file())
             self.assertTrue((destination / "scripts" / "guardrails" / "codex.py").is_file())
+            self.assertTrue((destination / "scripts" / "update_scope.py").is_file())
             self.assertFalse((destination / "scripts" / "guardrails" / "__pycache__").exists())
             self.assertTrue((destination / ".git").is_dir())
             self.assertTrue((destination / ".agents" / "skills" / "task-planning").is_dir())

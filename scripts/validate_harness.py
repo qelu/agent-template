@@ -84,6 +84,7 @@ def main() -> int:
         "agent/AGENT.md",
         "config/persona.yaml",
         "config/policies.yaml",
+        "scripts/update_scope.py",
         "config/capabilities.yaml",
         "scripts/guardrails/core.py",
         "scripts/guardrails/codex.py",
