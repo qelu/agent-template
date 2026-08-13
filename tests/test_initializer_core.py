@@ -49,9 +49,12 @@ class InitializerCoreTests(unittest.TestCase):
             plan.capabilities,
             (
                 "documentation-maintenance",
+                "import-external-skill",
+                "import-template-skills",
                 "manage-project-scope",
                 "map-skill-command",
                 "safe-tool-use",
+                "skill-auditor",
                 "task-planning",
             ),
         )
@@ -176,6 +179,11 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertTrue((destination / ".claude" / "skills" / "safe-tool-use").is_dir())
             self.assertTrue((destination / ".claude" / "skills" / "manage-project-scope").is_dir())
             self.assertTrue((destination / ".claude" / "skills" / "map-skill-command").is_dir())
+            self.assertTrue((destination / ".claude" / "skills" / "skill-auditor").is_dir())
+            self.assertTrue((destination / ".claude" / "skills" / "import-external-skill").is_dir())
+            self.assertTrue(
+                (destination / ".claude" / "skills" / "import-template-skills").is_dir()
+            )
             self.assertFalse((destination / ".claude" / "skills" / "evidence-gathering").exists())
             self.assertTrue(
                 (destination / ".claude" / "skills" / "anthropic-documentation").is_dir()
@@ -200,6 +208,9 @@ class InitializerCoreTests(unittest.TestCase):
                     "safe-tool-use",
                     "manage-project-scope",
                     "map-skill-command",
+                    "skill-auditor",
+                    "import-external-skill",
+                    "import-template-skills",
                     "documentation-maintenance",
                     "anthropic-documentation",
                 },
@@ -216,6 +227,31 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertEqual(receipt["execution"], "host-native")
             self.assertEqual(receipt["run_identity"], "host-session")
             self.assertEqual(receipt["host"], "claude-code")
+            self.assertEqual(
+                receipt["template"]["repository"],
+                "https://github.com/qelu/agent-template.git",
+            )
+            self.assertEqual(receipt["skill_imports"], [])
+
+    def test_optional_devoteam_branding_skill_is_packaged_when_selected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "agent"
+            plan = resolve_plan(
+                self.root,
+                self.spec(destination, host="codex", capabilities=("devoteam-branding",)),
+            )
+            execute_plan(self.root, plan)
+
+            skill = destination / ".agents" / "skills" / "devoteam-branding"
+            self.assertTrue((skill / "SKILL.md").is_file())
+            self.assertTrue((skill / "references" / "official-sources.md").is_file())
+            registry = yaml.safe_load(
+                (destination / "config" / "capabilities.yaml").read_text(encoding="utf-8")
+            )
+            self.assertIn(
+                "devoteam-branding",
+                {item["id"] for item in registry["capabilities"]},
+            )
 
     def test_capability_removal_cannot_escape_or_delete_project_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -382,7 +418,7 @@ class InitializerCoreTests(unittest.TestCase):
                 "Examples of what this harness can do (not a complete list)", result.stdout
             )
             self.assertIn("Here are some things you can try", result.stdout)
-            self.assertIn("they are not required next steps", result.stdout)
+            self.assertIn("These illustrate a few of many capabilities", result.stdout)
             self.assertIn("Add /path/to/project", result.stdout)
             self.assertIn("Map /scope", result.stdout)
             self.assertNotIn("scripts/validate_repository.py", result.stdout)

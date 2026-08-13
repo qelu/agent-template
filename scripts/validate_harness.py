@@ -104,6 +104,29 @@ def main() -> int:
     except (OSError, ValueError, yaml.YAMLError) as exc:
         errors.append(f"Invalid installation receipt: {exc}")
         receipt = {}
+    template = receipt.get("template")
+    if not isinstance(template, dict) or not all(
+        isinstance(template.get(field), str) and template.get(field)
+        for field in ("repository", "revision")
+    ):
+        errors.append("Installation receipt requires template repository and revision")
+    skill_imports = receipt.get("skill_imports")
+    if not isinstance(skill_imports, list):
+        errors.append("Installation receipt skill_imports must be a list")
+    else:
+        for item in skill_imports:
+            if not isinstance(item, dict) or set(item) != {
+                "skill",
+                "imported_at",
+                "source",
+                "audit_verdict",
+            }:
+                errors.append("Installation receipt contains an invalid skill import entry")
+                continue
+            if item.get("audit_verdict") not in {"pass", "pass-with-warnings"}:
+                errors.append("Imported skill receipt has an invalid audit verdict")
+            if not isinstance(item.get("source"), dict):
+                errors.append("Imported skill receipt source must be a mapping")
     host = str(receipt.get("host", ""))
     if host not in HOST_FILES:
         errors.append(f"Unsupported receipt host: {host or '<missing>'}")

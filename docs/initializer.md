@@ -118,8 +118,9 @@ permission.
 
 ## Capability selection
 
-`task-planning`, `safe-tool-use`, `manage-project-scope`, and
-`map-skill-command` are required. The scope-management skill lets a user ask the
+`task-planning`, `safe-tool-use`, `manage-project-scope`, `map-skill-command`,
+`skill-auditor`, `import-external-skill`, and `import-template-skills` are
+required. The scope-management skill lets a user ask the
 generated agent to add an existing project directory with read-only or
 read-write access. It updates the portable scope in `config/policies.yaml` while
 preserving denied paths and treating the host's native workspace boundary
@@ -132,9 +133,22 @@ a project folder and mapping a slash command. These demonstrate two of the
 harness's capabilities; they are not required next steps or a complete list of
 what the harness can do.
 
+The skill auditor performs static inspection without executing candidate code.
+The external importer accepts a local folder or ZIP, a checksum-pinned archive
+URL, or a Git repository pinned to a commit or tag. The template importer runs
+only when explicitly requested and reads stable tagged releases. Both importers
+preserve an installed capability ID or existing destination directory without
+comparison, update, merge, or overwrite.
+
 Active optional capabilities
 are read from the lightweight source registry and copied to the native skill
 directory:
+
+`devoteam-branding` is an optional capability for creating, rebranding, and
+auditing Devoteam documents, presentations, spreadsheets, PDFs, CVs, reports,
+proposals, and visual assets. It resolves current official templates and logos
+through the authenticated Devoteam Branding Zone at task time; the public
+template repository does not embed private Drive links or file IDs.
 
 | Host | Skills directory |
 | --- | --- |
@@ -188,6 +202,8 @@ supplied empty destination unchanged.
 - `execution: host-native`
 - `run_identity: host-session`
 - documentation provider and selected capabilities
+- template repository and initialized revision
+- immutable provenance and audit verdicts for subsequently imported skills
 - environment and security-tool choices
 - approved external commands
 - `validation: pending` or `validation: passed`

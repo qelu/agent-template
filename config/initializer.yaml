@@ -4,6 +4,9 @@ required_capabilities:
   - safe-tool-use
   - manage-project-scope
   - map-skill-command
+  - skill-auditor
+  - import-external-skill
+  - import-template-skills
 defaults:
   host: claude-code
   python: "3.13"
