@@ -296,7 +296,8 @@ def _path_denial(action: str, values: list[str], scope: dict[str, Any], root: Pa
         if candidate is None:
             continue
         relative = _relative(candidate, root)
-        if relative is not None and _matches_any(relative, scope["denied_paths"]):
+        denial_target = relative if relative is not None else candidate.as_posix()
+        if _matches_any(denial_target, scope["denied_paths"]):
             return "Access to a denied path is prohibited."
         allowed = [_filesystem_path(item, root) for item in scope[allowed_key]]
         if not any(parent is not None and _is_within(candidate, parent) for parent in allowed):

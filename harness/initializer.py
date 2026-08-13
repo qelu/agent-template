@@ -201,6 +201,24 @@ def load_initializer_config(source: Path) -> dict[str, Any]:
     return payload
 
 
+def destination_error(source: Path, destination: Path) -> str | None:
+    """Return a user-facing error when a destination cannot be safely initialized."""
+    source = source.resolve()
+    destination = destination.expanduser().resolve()
+    if source == destination or source in destination.parents:
+        return "Destination must be outside the template directory"
+    if not destination.exists():
+        return None
+    if destination.is_symlink() or not destination.is_dir():
+        return f"Destination exists and is not a regular directory: {destination}"
+    try:
+        if any(destination.iterdir()):
+            return f"Destination directory is not empty; refusing to overwrite: {destination}"
+    except OSError as exc:
+        return f"Destination directory cannot be inspected: {destination}: {exc}"
+    return None
+
+
 def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
     destination = spec.destination.expanduser().resolve()
     host = HOST_ALIASES.get(spec.host, spec.host)
@@ -220,10 +238,8 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
     if host == "portable" and provider in DOCUMENTATION_SERVERS:
         raise InitializerError("MCP documentation requires a concrete --host")
     source = source.resolve()
-    if destination.exists():
-        raise InitializerError(f"Destination already exists; refusing to overwrite: {destination}")
-    if source == destination or source in destination.parents:
-        raise InitializerError("Destination must be outside the template directory")
+    if error := destination_error(source, destination):
+        raise InitializerError(error)
 
     choices = capability_choices(source)
     by_id = {choice.capability_id: choice for choice in choices}
@@ -246,7 +262,13 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
     if normalized.install_dependencies and not status_by_command["uv"].available:
         raise InitializerError("uv is required for --install; install uv and rerun")
     if normalized.security_tools and not status_by_command["gitleaks"].available:
-        raise InitializerError("Gitleaks is required when security tools are selected")
+        if platform.system() == "Darwin" and shutil.which("brew"):
+            external_commands.append(("brew", "install", "gitleaks"))
+        else:
+            raise InitializerError(
+                "Gitleaks is not installed. Install it from https://github.com/gitleaks/gitleaks "
+                "and rerun with --security-tools."
+            )
     if (
         normalized.install_host_tool
         and host_command
@@ -267,6 +289,9 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
 
 def execute_plan(source: Path, plan: InstallationPlan) -> Path:
     """Execute an approved plan transactionally and return the created destination."""
+    destination = plan.spec.destination
+    if error := destination_error(source, destination):
+        raise InitializerError(error)
     for command in plan.external_commands:
         _run(list(command), cwd=source)
     if plan.spec.install_host_tool:
@@ -276,7 +301,10 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
                 f"The {host_command[0]} installation completed but the command is not on PATH"
             )
 
-    destination = plan.spec.destination
+    if plan.spec.security_tools and not shutil.which("gitleaks"):
+        raise InitializerError("Gitleaks is no longer available on PATH")
+    if error := destination_error(source, destination):
+        raise InitializerError(error)
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(
         tempfile.mkdtemp(prefix=f".{destination.name}.initializer-", dir=destination.parent)
@@ -300,6 +328,11 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
         if plan.spec.install_dependencies:
             provision_and_validate(staging, plan)
             write_receipt(staging, plan, validation="passed")
+        elif plan.spec.security_tools:
+            _run(
+                ["gitleaks", "dir", ".", "--no-banner", "--redact", "--exit-code", "1"],
+                cwd=staging,
+            )
         unresolved = unresolved_placeholders(staging)
         if unresolved:
             raise InitializerError("Unresolved placeholders: " + ", ".join(unresolved))
@@ -633,8 +666,11 @@ def unresolved_placeholders(root: Path) -> list[str]:
 
 
 def _run(command: list[str], *, cwd: Path) -> None:
+    environment = os.environ.copy()
+    if Path(command[0]).name == "uv":
+        environment.pop("VIRTUAL_ENV", None)
     try:
-        subprocess.run(command, cwd=cwd, check=True)
+        subprocess.run(command, cwd=cwd, check=True, env=environment)
     except (OSError, subprocess.CalledProcessError) as exc:
         raise InitializerError(f"Command failed: {' '.join(command)}") from exc
 

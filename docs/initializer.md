@@ -14,7 +14,8 @@ The system Python is never replaced.
 
 ## Wizard flow
 
-1. **Destination** — a new directory; existing destinations are never overwritten.
+1. **Destination** — a new directory or an existing empty directory; existing
+   files are never overwritten.
 2. **Identity** — display name and stable lowercase Agent ID.
 3. **Persona** — goal, role, tone, and language.
 4. **Host** — Codex, Claude Code, Antigravity, or portable.
@@ -106,7 +107,16 @@ permission.
 
 ## Capability selection
 
-`task-planning` and `safe-tool-use` are required. Active optional capabilities
+`task-planning`, `safe-tool-use`, `manage-project-scope`, and
+`map-skill-command` are required. The scope-management skill lets a user ask the
+generated agent to add an existing project directory with read-only or
+read-write access. It updates the portable scope in `config/policies.yaml` while
+preserving denied paths and treating the host's native workspace boundary
+separately.
+
+The command-mapping skill creates project-level slash aliases that load an
+installed target skill without copying its instructions or expanding authority.
+Active optional capabilities
 are read from the lightweight source registry and copied to the native skill
 directory:
 
@@ -131,7 +141,7 @@ tests instead of fields in the capability manifest.
 | Python | Obtained by `uv`; system Python remains unchanged. |
 | Python packages | Installed into the generated `.venv`. |
 | Development tools | Ruff, pytest, mypy, and pre-commit from the dev extra. |
-| Gitleaks | Required and run only when security tools are selected. |
+| Gitleaks | Run only when selected. The wizard detects it before offering the scan and can plan an official Homebrew install on macOS. |
 | Codex CLI | Optional explicit installation using the official npm package. |
 | Claude Code | Optional explicit installation using the official npm package. |
 | Antigravity CLI | Detected as `agy`; use Google's official installer when absent. The initializer does not pipe a remote script into a shell. |
@@ -146,10 +156,12 @@ Generation occurs in a temporary sibling directory. The initializer:
 2. copies only the portable contract and selected source assets;
 3. writes native host settings, permissions, hooks, MCP, and skill locations;
 4. replaces identity placeholders and writes a pending receipt;
-5. optionally provisions the `.venv`, validates the harness, runs Ruff and Gitleaks;
-6. atomically publishes the destination only after success.
+5. optionally provisions the `.venv` and runs the harness validator and Ruff;
+6. runs Gitleaks when selected, whether or not Python provisioning was selected;
+7. atomically publishes the destination only after success.
 
-Failure removes the staging directory and leaves the requested destination absent.
+Failure removes the staging directory and leaves a new destination absent or a
+supplied empty destination unchanged.
 
 ## Installation receipt
 
@@ -185,7 +197,7 @@ uv run python scripts/initialize_agent.py \
 | Flag | Purpose |
 | --- | --- |
 | `--wizard` | Force interactive mode. |
-| `--destination PATH` | New harness destination. |
+| `--destination PATH` | New or existing empty harness destination. |
 | `--name`, `--id`, `--goal`, `--role`, `--tone`, `--language` | Identity and persona. |
 | `--host` | `portable`, `codex`, `claude-code`, `antigravity`, or alias `gemini-cli`. |
 | `--docs-provider` | `none`, `openai`, `anthropic`, or `gemini`. |
@@ -193,7 +205,7 @@ uv run python scripts/initialize_agent.py \
 | `--python VERSION` | Python version passed to `uv`. |
 | `--install` | Provision and validate the generated project. |
 | `--dev-tools` / `--no-dev-tools` | Include or omit development tools. |
-| `--security-tools` | Require and run Gitleaks. |
+| `--security-tools` | Run Gitleaks; on macOS, a missing binary can be installed through Homebrew after plan approval. |
 | `--install-host-tool` | Plan an approved Codex or Claude Code CLI installation when absent. |
 | `--yes` | Approve external commands non-interactively. |
 | `--dry-run` | Print the plan without writing. |

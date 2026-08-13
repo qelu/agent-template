@@ -44,6 +44,34 @@ Claude Code and Antigravity return `ask` directly from `PreToolUse`. Codex's
 pre-tool hook enforces denials while its generated read-only sandbox and
 `on-request` approval flow provide the native confirmation boundary for writes.
 
+## Add project folders
+
+The harness initially reads and writes only inside this project. To add another
+project, ask the agent:
+
+> Add `/path/to/project` to this harness with read-only access.
+
+Use “read-write access” only when the agent should modify that project. The
+required `manage-project-scope` skill resolves the exact directory and updates
+`config/policies.yaml`, where `allowed_read_paths` and `allowed_write_paths`
+define portable scope. `denied_paths` continues to take precedence.
+
+Policy scope does not override the selected host's native sandbox or workspace
+boundary. If the host still blocks the folder, add it through the host's normal
+workspace controls rather than weakening safety settings.
+
+## Map slash commands to skills
+
+Ask the agent to create a short alias for any installed skill:
+
+> Map `/scope` to the `manage-project-scope` skill.
+
+The required `map-skill-command` skill creates a small alias skill in the
+selected host's native skill directory and registers it in
+`config/capabilities.yaml`. The alias loads the original skill, so it does not
+duplicate instructions or grant additional authority. Enabled skills appear in
+the host's command picker; Codex also supports explicit `$scope` invocation.
+
 Plan approval applies only to the exact plan presented. A later state-changing
 request is new scope, even in the same conversation. Native tool approval is a
 separate host decision.

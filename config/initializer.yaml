@@ -2,6 +2,8 @@ version: "1.0"
 required_capabilities:
   - task-planning
   - safe-tool-use
+  - manage-project-scope
+  - map-skill-command
 defaults:
   host: claude-code
   python: "3.13"

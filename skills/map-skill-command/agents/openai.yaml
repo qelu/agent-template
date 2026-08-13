@@ -1,0 +1,4 @@
+interface:
+  display_name: "Map Skill Command"
+  short_description: "Create slash aliases for installed skills."
+  default_prompt: "Use $map-skill-command to map a slash command to an installed harness skill."

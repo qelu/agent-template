@@ -158,8 +158,9 @@ uv run python scripts/initialize_agent.py \
 ```
 
 Use `--dry-run` to inspect the complete installation plan without changing
-anything. Existing destinations are never overwritten. Provider credentials are
-never requested or written; authentication stays in the selected host.
+anything. New and existing empty destinations are supported; existing files are
+never overwritten. Provider credentials are never requested or written;
+authentication stays in the selected host.
 
 See the [terminal initializer guide](docs/initializer.md) for every option,
 generated path, installation boundary, receipt field, and failure behavior.
@@ -223,7 +224,8 @@ independent layer of defense.
 
 ## Capabilities
 
-`task-planning` and `safe-tool-use` are required. Optional packaged capabilities
+`task-planning`, `safe-tool-use`, `manage-project-scope`, and
+`map-skill-command` are required. Optional packaged capabilities
 currently include `evidence-gathering` and `documentation-maintenance`.
 
 Create another capability in the source template with:

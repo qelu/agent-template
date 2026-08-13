@@ -12,6 +12,7 @@ from harness.initializer import (
     InitializationSpec,
     InitializerError,
     capability_choices,
+    destination_error,
     execute_plan,
     provision_and_validate,
     resolve_plan,
@@ -44,9 +45,37 @@ class InitializerCoreTests(unittest.TestCase):
             plan = resolve_plan(self.root, self.spec(Path(temporary) / "agent"))
         self.assertEqual(plan.documentation_provider, "anthropic")
         self.assertEqual(
-            plan.capabilities, ("documentation-maintenance", "safe-tool-use", "task-planning")
+            plan.capabilities,
+            (
+                "documentation-maintenance",
+                "manage-project-scope",
+                "map-skill-command",
+                "safe-tool-use",
+                "task-planning",
+            ),
         )
         self.assertEqual(plan.launch_command, "claude")
+
+    def test_resolver_accepts_an_existing_empty_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "agent"
+            destination.mkdir()
+            plan = resolve_plan(self.root, self.spec(destination))
+            execute_plan(self.root, plan)
+            self.assertTrue((destination / "config" / "persona.yaml").is_file())
+
+    def test_resolver_rejects_a_non_empty_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "agent"
+            destination.mkdir()
+            (destination / "keep.txt").write_text("user data", encoding="utf-8")
+            with self.assertRaisesRegex(InitializerError, "not empty"):
+                resolve_plan(self.root, self.spec(destination))
+            self.assertEqual((destination / "keep.txt").read_text(), "user data")
+
+    def test_destination_validation_rejects_template_descendants(self) -> None:
+        error = destination_error(self.root, self.root / "generated-agent")
+        self.assertIn("outside the template", error or "")
 
     def test_gemini_cli_alias_resolves_to_antigravity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -110,6 +139,21 @@ class InitializerCoreTests(unittest.TestCase):
             plan.external_commands, (("npm", "install", "-g", "@anthropic-ai/claude-code"),)
         )
 
+    def test_missing_gitleaks_plans_homebrew_install_on_macos(self) -> None:
+        def find(command: str) -> str | None:
+            return None if command == "gitleaks" else f"/tools/{command}"
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("harness.initializer.platform.system", return_value="Darwin"),
+            patch("harness.initializer.shutil.which", side_effect=find),
+        ):
+            plan = resolve_plan(
+                self.root,
+                self.spec(Path(temporary) / "agent", security_tools=True),
+            )
+        self.assertIn(("brew", "install", "gitleaks"), plan.external_commands)
+
     def test_execution_generates_only_host_native_harness(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "agent"
@@ -122,6 +166,8 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertTrue((destination / "scripts" / "guardrails" / "claude_code.py").is_file())
             self.assertTrue((destination / ".claude" / "skills" / "task-planning").is_dir())
             self.assertTrue((destination / ".claude" / "skills" / "safe-tool-use").is_dir())
+            self.assertTrue((destination / ".claude" / "skills" / "manage-project-scope").is_dir())
+            self.assertTrue((destination / ".claude" / "skills" / "map-skill-command").is_dir())
             self.assertFalse((destination / ".claude" / "skills" / "evidence-gathering").exists())
             self.assertTrue(
                 (destination / ".claude" / "skills" / "anthropic-documentation").is_dir()
@@ -144,6 +190,8 @@ class InitializerCoreTests(unittest.TestCase):
                 {
                     "task-planning",
                     "safe-tool-use",
+                    "manage-project-scope",
+                    "map-skill-command",
                     "documentation-maintenance",
                     "anthropic-documentation",
                 },
@@ -188,6 +236,22 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertFalse(destination.exists())
             self.assertEqual(list(parent.glob(".agent.initializer-*")), [])
 
+    def test_failed_provisioning_preserves_an_existing_empty_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            destination = parent / "agent"
+            destination.mkdir()
+            plan = resolve_plan(self.root, self.spec(destination, install_dependencies=True))
+            with patch(
+                "harness.initializer.provision_and_validate",
+                side_effect=InitializerError("validation failed"),
+            ):
+                with self.assertRaisesRegex(InitializerError, "validation failed"):
+                    execute_plan(self.root, plan)
+            self.assertTrue(destination.is_dir())
+            self.assertEqual(list(destination.iterdir()), [])
+            self.assertEqual(list(parent.glob(".agent.initializer-*")), [])
+
     def test_successful_provisioning_publishes_passed_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "agent"
@@ -217,6 +281,35 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertEqual(commands[0], ["/tools/uv", "sync", "--python", "3.13", "--extra", "dev"])
         self.assertIn(["/tools/uv", "run", "python", "scripts/validate_harness.py"], commands)
         self.assertIn(["/tools/uv", "run", "ruff", "check", "."], commands)
+        self.assertIn(
+            ["gitleaks", "dir", ".", "--no-banner", "--redact", "--exit-code", "1"], commands
+        )
+
+    def test_uv_provisioning_ignores_an_unrelated_active_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            with (
+                patch("harness.initializer.shutil.which", return_value="/tools/uv"),
+                patch.dict("harness.initializer.os.environ", {"VIRTUAL_ENV": "/other/.venv"}),
+                patch("harness.initializer.subprocess.run") as run,
+            ):
+                plan = resolve_plan(
+                    self.root, self.spec(destination / "agent", install_dependencies=True)
+                )
+                provision_and_validate(destination, plan)
+        for call in run.call_args_list:
+            self.assertNotIn("VIRTUAL_ENV", call.kwargs["env"])
+
+    def test_security_scan_runs_without_python_provisioning(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("harness.initializer.shutil.which", return_value="/tools/gitleaks"),
+            patch("harness.initializer._run") as run,
+        ):
+            destination = Path(temporary) / "agent"
+            plan = resolve_plan(self.root, self.spec(destination, security_tools=True))
+            execute_plan(self.root, plan)
+        commands = [call.args[0] for call in run.call_args_list]
         self.assertIn(
             ["gitleaks", "dir", ".", "--no-banner", "--redact", "--exit-code", "1"], commands
         )
@@ -277,6 +370,8 @@ class InitializerCoreTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("scripts/validate_harness.py", result.stdout)
+            self.assertIn("Add /path/to/project", result.stdout)
+            self.assertIn("Map /scope", result.stdout)
             self.assertNotIn("scripts/validate_repository.py", result.stdout)
 
 

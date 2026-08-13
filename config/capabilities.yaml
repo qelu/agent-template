@@ -21,6 +21,20 @@ capabilities:
     description: Apply tools within scope, least privilege, and approval boundaries.
     when: Use before executing tools that can change state or cross a trust boundary.
 
+  - id: manage-project-scope
+    type: skill
+    status: active
+    path: skills/manage-project-scope
+    description: Add project folders to the harness's portable read or read-write policy scope.
+    when: Use when a user wants the harness to access another folder or repository.
+
+  - id: map-skill-command
+    type: skill
+    status: active
+    path: skills/map-skill-command
+    description: Create project-level slash-command aliases for installed harness skills.
+    when: Use when a user wants to map a slash command to an installed skill.
+
   - id: documentation-maintenance
     type: skill
     status: active
