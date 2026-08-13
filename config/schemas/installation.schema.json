@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/schemas/installation.schema.json",
+  "$id": "https://raw.githubusercontent.com/qelu/agent-template/main/config/schemas/installation.schema.json",
   "title": "Agent harness installation receipt",
   "type": "object",
   "required": [
@@ -62,7 +62,7 @@
         "host_tool_install_requested"
       ],
       "properties": {
-        "python": {"type": "string", "pattern": "^3\\.(11|12|13)$"},
+        "python": {"type": "string", "pattern": "^3\\.(11|12|13|14)$"},
         "project_dependencies_installed": {"type": "boolean"},
         "development_tools": {"type": "boolean"},
         "security_tools": {"type": "boolean"},

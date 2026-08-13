@@ -54,6 +54,13 @@ class MapSkillCommandTests(unittest.TestCase):
             text=True,
         )
 
+    def test_skill_resolves_its_registered_helper_instead_of_a_root_script(self) -> None:
+        instructions = (self.script.parent.parent / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("<registered-skill-path>/scripts/map_command.py", instructions)
+        self.assertIn("/path/to/harness/scripts/map_command.py", instructions)
+        self.assertIn("not exist", instructions)
+
     def test_creates_native_alias_skill_and_registers_it_for_each_host(self) -> None:
         roots = {
             "portable": Path(".agents/skills"),

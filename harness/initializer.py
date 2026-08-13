@@ -321,6 +321,7 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
                 "__AGENT_ROLE__": plan.spec.role,
                 "__AGENT_TONE__": plan.spec.tone,
                 "__AGENT_LANGUAGE__": plan.spec.language,
+                "__AGENT_PYTHON__": plan.spec.python_version,
                 PROJECT_NAME_PLACEHOLDER: plan.spec.agent_id,
             },
         )

@@ -32,9 +32,10 @@ Maintainers may squash merge a pull request to keep release history concise.
 
 ## Compatibility and releases
 
-The project follows Semantic Versioning. Before 1.0, document breaking changes in
-the changelog and increment the minor version. User-visible changes should add an
-entry under `Unreleased` in `CHANGELOG.md`.
+The project follows Semantic Versioning. Preserve documented 1.x interfaces within
+the major release line; record breaking changes explicitly and reserve them for a
+new major version. User-visible changes should add an entry under `Unreleased` in
+`CHANGELOG.md`.
 
 ## Security reports
 

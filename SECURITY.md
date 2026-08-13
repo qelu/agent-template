@@ -2,13 +2,12 @@
 
 ## Supported versions
 
-Security fixes are applied to the latest release line. Before version 1.0,
-interfaces may change between minor releases.
+Security fixes are applied to the latest release line.
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x | Yes |
-| Earlier | No |
+| 1.0.x | Yes |
+| 0.x | No |
 
 ## Reporting a vulnerability
 

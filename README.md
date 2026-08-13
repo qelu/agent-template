@@ -49,7 +49,7 @@ flowchart LR
 | Approval boundaries | Reads are allowed, writes ask through native host controls, and deletions are denied. Plan approval remains separate. |
 | Hard safety checks | Host-specific pre-tool bridges apply one portable policy to allowed and denied paths, shell commands, and tool actions. |
 | Privacy-conscious audit | Hook events record hashes and metadata, never prompts, arguments, or secrets. |
-| Capability selection | Install only the requested skills, runbooks, workflows, hooks, validators, and MCP servers. |
+| Capability selection | Install the required core skills plus only the optional capabilities selected by the user. |
 | Current documentation | Add provider-appropriate official documentation access in the host's native format. |
 | Transactional setup | Build and validate in a temporary sibling, then publish the destination atomically. |
 | Capability discovery | A small registry records each capability's ID, description, trigger, state, and path. |
@@ -170,19 +170,21 @@ generated path, installation boundary, receipt field, and failure behavior.
 A normal initialized project is intentionally small:
 
 ```text
-.agent-harness/installation.yaml   immutable installation choices
+.agent-harness/installation.yaml   installation choices and skill-import provenance
 agent/AGENT.md                     portable behavioral contract
 config/persona.yaml                identity, goal, language, and tone
 config/policies.yaml               portable authority and safety intent
 config/capabilities.yaml           selected capability manifest
 scripts/guardrails/                shared policy evaluator plus one bridge per host
+scripts/update_scope.py            host-independent project-scope launcher
 scripts/validate_harness.py        generated-project conformance check
 <host-native files>                instructions, permissions, hooks, MCP
-<host-native skills directory>     only selected skills
+<host-native skills directory>     required skills and selected optional skills
 ```
 
-It does **not** contain provider SDK adapters, a Python model loop, a duplicate
-lifecycle database, tool-event schemas, or standalone runtime state.
+It does **not** add a second model runtime or a parallel lifecycle system. The
+selected host remains responsible for inference, authentication, sessions,
+sandboxing, and tool execution.
 
 ## Run IDs and plans
 
@@ -224,9 +226,36 @@ independent layer of defense.
 
 ## Capabilities
 
-`task-planning`, `safe-tool-use`, `manage-project-scope`, and
-`map-skill-command` are required. Optional packaged capabilities
-currently include `evidence-gathering` and `documentation-maintenance`.
+Every generated harness includes these required skills:
+
+- `task-planning` and `safe-tool-use` for bounded work and tool authority;
+- `manage-project-scope` for adding project directories without weakening denied paths;
+- `map-skill-command` for creating short aliases for installed skills;
+- `skill-auditor` for static inspection without executing candidate content;
+- `import-external-skill` for explicit imports from immutable external sources; and
+- `import-template-skills` for manually importing only genuinely new skills from stable
+  tagged template releases.
+
+Optional packaged capabilities currently include `evidence-gathering`,
+`documentation-maintenance`, and `devoteam-branding`. The branding skill applies,
+rebrands, or audits business artifacts using current authenticated Devoteam sources
+when available; this public repository does not embed private assets or links. The
+wizard preselects active optional capabilities so users can deselect any they do not
+want. In non-interactive mode, omitting `--capability` includes all active optional
+capabilities; supplying the flag one or more times selects only those optional IDs.
+
+From a generated harness, project scope can be updated consistently on every host:
+
+```bash
+python3 scripts/update_scope.py \
+  --root /path/to/harness \
+  --path /path/to/project \
+  --access read
+```
+
+Use `read-write` only when the agent must modify the added project. Template and
+external skill imports are manually triggered; neither importer runs on a schedule
+or updates, merges, or overwrites an installed capability or existing skill directory.
 
 Create another capability in the source template with:
 
@@ -287,10 +316,7 @@ tests/       host conformance and behavioral tests
 - Expand conformance fixtures as host-native permission and hook surfaces evolve.
 - Add optional packaged hooks, workflows, runbooks, and MCP integrations.
 - Improve semantic plan-approval enforcement when hosts expose stable approval events.
-- Stabilize the initializer and generated manifest toward a 1.0 release.
-
-Provider SDK adapters are not on the critical path. They belong in a separate
-headless-runtime project if that use case is pursued later.
+- Broaden release-upgrade coverage while preserving locally changed skills.
 
 ## License
 
