@@ -27,6 +27,11 @@ The system Python is never replaced.
 Use arrows for selection, Space to toggle checkboxes, Enter to continue, and
 Ctrl+C to cancel without creating the destination.
 
+The primary goal should describe a concrete result the agent is expected to
+produce, not a personality trait. For example: “Review pull requests and
+identify security or correctness issues before merge.” The role can then
+describe the working identity, such as “security-focused code reviewer.”
+
 ## Host selection
 
 The host is also the runtime. There is no second runtime question.
@@ -116,6 +121,11 @@ separately.
 
 The command-mapping skill creates project-level slash aliases that load an
 installed target skill without copying its instructions or expanding authority.
+On the completion screen, “Here are some things you can try” introduces adding
+a project folder and mapping a slash command. These demonstrate two of the
+harness's capabilities; they are not required next steps or a complete list of
+what the harness can do.
+
 Active optional capabilities
 are read from the lightweight source registry and copied to the native skill
 directory:

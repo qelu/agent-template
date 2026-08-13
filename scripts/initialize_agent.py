@@ -162,7 +162,12 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
     )
     name = _ask(questionary.text("Display name — shown in generated documentation"))
     agent_id = _ask(questionary.text("Agent ID — stable lowercase identifier", default=slug(name)))
-    goal = _ask(questionary.text("Primary goal — the outcome this persona is responsible for"))
+    console.print(
+        'Primary goal example: "Review pull requests and identify security or correctness '
+        'issues before merge."',
+        style="dim",
+    )
+    goal = _ask(questionary.text("Primary goal — what should this agent achieve?"))
     role = _ask(
         questionary.text(
             "Persona role — identity, expertise, and working stance", default="assistant"
@@ -368,7 +373,7 @@ def show_plan(plan: InstallationPlan, *, interactive: bool, no_color: bool) -> b
 def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
     capabilities = "\n".join(
         (
-            "What this harness can do:",
+            "Examples of what this harness can do (not a complete list):",
             "  • Follow the configured identity, goal, role, language, and tone.",
             "  • Plan and execute work through explicit allow / ask / deny boundaries.",
             "  • Use selected skills and official documentation integrations.",
@@ -383,9 +388,11 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
     except ImportError:
         print(f"Created agent harness at {plan.spec.destination}\n\n{capabilities}")
         print(
-            '\nTo add a project, ask: "Add /path/to/project to this harness with read-write access."'
+            "\nHere are some things you can try:"
+            '\n  "Add /path/to/project to this harness with read-write access."'
         )
-        print('To map a command, ask: "Map /scope to the manage-project-scope skill."')
+        print('  "Map /scope to the manage-project-scope skill."')
+        print("These are examples, not required next steps or the limit of the harness.")
         return
     console = Console(no_color=no_color)
     next_steps = [f"cd {shlex.quote(str(plan.spec.destination))}"]
@@ -402,11 +409,13 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
         Panel(
             "Harness created successfully.\n\n"
             + capabilities
-            + "\n\nNext steps:\n"
+            + "\n\nRequired setup / launch steps:\n"
             + "\n".join(f"  {step}" for step in next_steps)
-            + '\n\nAdd a project folder by asking:\n  "Add /path/to/project to this harness '
-            'with read-write access."\n  The skill updates config/policies.yaml safely.'
-            + '\n\nMap a command by asking:\n  "Map /scope to the manage-project-scope skill."',
+            + '\n\nHere are some things you can try:\n  "Add '
+            '/path/to/project to this harness with read-write access."\n  "Map /scope to '
+            'the manage-project-scope skill."\n\nThese illustrate two of many capabilities; '
+            "they are not required next steps. The harness can also plan, edit, review, "
+            "validate, and document work within its configured skills and policies.",
             title="Ready",
             border_style="green",
         )

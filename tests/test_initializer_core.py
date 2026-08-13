@@ -370,6 +370,11 @@ class InitializerCoreTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("scripts/validate_harness.py", result.stdout)
+            self.assertIn(
+                "Examples of what this harness can do (not a complete list)", result.stdout
+            )
+            self.assertIn("Here are some things you can try", result.stdout)
+            self.assertIn("they are not required next steps", result.stdout)
             self.assertIn("Add /path/to/project", result.stdout)
             self.assertIn("Map /scope", result.stdout)
             self.assertNotIn("scripts/validate_repository.py", result.stdout)
