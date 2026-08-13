@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import jsonschema
 import yaml
 
 from harness.initializer import (
@@ -67,6 +68,26 @@ class InitializerCoreTests(unittest.TestCase):
             plan = resolve_plan(self.root, self.spec(destination))
             execute_plan(self.root, plan)
             self.assertTrue((destination / "config" / "persona.yaml").is_file())
+
+    def test_python_314_is_valid_installation_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "agent"
+            plan = resolve_plan(
+                self.root,
+                self.spec(destination, python_version="3.14"),
+            )
+            execute_plan(self.root, plan)
+            receipt = yaml.safe_load(
+                (destination / ".agent-harness" / "installation.yaml").read_text()
+            )
+            schema = json.loads(
+                (self.root / "config" / "schemas" / "installation.schema.json").read_text()
+            )
+            generated_readme = (destination / "README.md").read_text(encoding="utf-8")
+
+        jsonschema.Draft202012Validator(schema).validate(receipt)
+        self.assertEqual(receipt["environment"]["python"], "3.14")
+        self.assertIn("uv sync --python 3.14", generated_readme)
 
     def test_resolver_rejects_a_non_empty_destination(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

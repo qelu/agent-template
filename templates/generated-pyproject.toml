@@ -1,5 +1,6 @@
 [project]
 name = "agent-template-placeholder"
+# Starter version for the generated agent project, independent of the template release.
 version = "0.1.0"
 description = "Host-native agent harness"
 readme = "README.md"

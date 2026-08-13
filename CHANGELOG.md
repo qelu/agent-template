@@ -5,6 +5,20 @@ the project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Aligned source, initializer, generated-project, contribution, release, and
+  security documentation with the v1.0 host-native implementation.
+- Added Python 3.14 to the initializer's supported environment choices and
+  installation receipt schema.
+
+### Fixed
+
+- Corrected `map-skill-command` instructions to invoke the registered bundled
+  helper instead of a nonexistent project-level script.
+
+## [1.0.0] - 2026-08-13
+
 ### Added
 
 - A terminal initializer with ASCII branding, host selection, locked
@@ -23,6 +37,13 @@ the project follows Semantic Versioning.
   denial, and conservative handling of unknown actions.
 - Official-shaped hook protocol fixtures, host-profile conformance tests, and
   generated-project validation.
+- Required project-scope and skill-command helpers with host-native skill paths.
+- Static skill auditing plus manually triggered import workflows for immutable
+  external sources and genuinely new skills from stable tagged template releases.
+- Optional Devoteam branding support for documents, presentations, spreadsheets,
+  PDFs, CVs, proposals, reports, and visual assets using authenticated official sources.
+- A host-independent generated `scripts/update_scope.py` launcher, including
+  Antigravity/Linux regression coverage.
 
 ### Changed
 
@@ -38,6 +59,8 @@ the project follows Semantic Versioning.
   prohibited deletions, denied paths, and conservative unknown actions.
 - Updated repository, generated-project, contributor, security, example, and ADR
   documentation to describe the same host-native enforcement boundary.
+- Improved wizard explanations, persona examples, existing-empty-destination handling,
+  Gitleaks preflight, Codex CLI detection, and post-install capability examples.
 
 ### Removed
 
@@ -59,5 +82,6 @@ the project follows Semantic Versioning.
 - Official documentation integrations for OpenAI, Anthropic, and Gemini workflows.
 - Repository validation, behavioral tests, CI, and dependency update automation.
 
-[Unreleased]: https://github.com/qelu/agent-template/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/qelu/agent-template/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/qelu/agent-template/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/qelu/agent-template/releases/tag/v0.1.0

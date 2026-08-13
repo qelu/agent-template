@@ -140,9 +140,35 @@ only when explicitly requested and reads stable tagged releases. Both importers
 preserve an installed capability ID or existing destination directory without
 comparison, update, merge, or overwrite.
 
+From the generated harness root, the scope skill uses one command on every host
+and operating system:
+
+```bash
+python3 scripts/update_scope.py \
+  --root /path/to/harness \
+  --path /path/to/project \
+  --access read
+```
+
+The launcher resolves the helper from the selected host's installed skill
+directory. Older harnesses without the launcher must resolve the
+`manage-project-scope` path from `config/capabilities.yaml` and invoke its bundled
+`scripts/update_scope.py` by absolute path.
+
+Users can trigger the management skills in plain language, for example:
+
+- “Audit this skill ZIP before importing it.”
+- “Import this new skill from `/path/to/skill`.”
+- “Check the latest stable agent-template release for new skills.”
+
+The last request performs discovery only when the user asks to check. Importing is
+a separate explicit intent, and no template import runs automatically.
+
 Active optional capabilities
 are read from the lightweight source registry and copied to the native skill
-directory:
+directory. They are preselected in the wizard and can be deselected. In
+non-interactive mode, omitting `--capability` includes all active optional
+capabilities; using the flag selects only the repeated optional IDs:
 
 `devoteam-branding` is an optional capability for creating, rebranding, and
 auditing Devoteam documents, presentations, spreadsheets, PDFs, CVs, reports,
@@ -168,9 +194,9 @@ tests instead of fields in the capability manifest.
 
 | Requirement | Behavior |
 | --- | --- |
-| Python | Obtained by `uv`; system Python remains unchanged. |
-| Python packages | Installed into the generated `.venv`. |
-| Development tools | Ruff, pytest, mypy, and pre-commit from the dev extra. |
+| Python | Python 3.11–3.14 obtained by `uv` when provisioning; system Python remains unchanged. |
+| Python packages | Installed into the generated `.venv` only when `--install` is selected. |
+| Development tools | Ruff, pytest, mypy, and pre-commit from the dev extra when provisioning with development tools enabled. |
 | Gitleaks | Run only when selected. The wizard detects it before offering the scan and can plan an official Homebrew install on macOS. |
 | Codex CLI | Optional explicit installation using the official npm package. |
 | Claude Code | Optional explicit installation using the official npm package. |
@@ -233,8 +259,8 @@ uv run python scripts/initialize_agent.py \
 | `--name`, `--id`, `--goal`, `--role`, `--tone`, `--language` | Identity and persona. |
 | `--host` | `portable`, `codex`, `claude-code`, `antigravity`, or alias `gemini-cli`. |
 | `--docs-provider` | `none`, `openai`, `anthropic`, or `gemini`. |
-| `--capability ID` | Include an optional capability; repeat for more. |
-| `--python VERSION` | Python version passed to `uv`. |
+| `--capability ID` | Select an optional capability; repeat for more. If omitted, include all active optional capabilities. |
+| `--python VERSION` | Python 3.11–3.14 passed to `uv`; defaults to 3.13. |
 | `--install` | Provision and validate the generated project. |
 | `--dev-tools` / `--no-dev-tools` | Include or omit development tools. |
 | `--security-tools` | Run Gitleaks; on macOS, a missing binary can be installed through Homebrew after plan approval. |

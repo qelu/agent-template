@@ -14,20 +14,23 @@ Run the selected host from this project directory. The canonical contract is
 Validate the generated harness with:
 
 ```bash
-uv sync --extra dev
+uv sync --python __AGENT_PYTHON__
 uv run python scripts/validate_harness.py
 ```
+
+Add `--extra dev` to `uv sync` when development tools are wanted. The installation
+receipt records whether they were selected during initialization.
 
 The installation choices are recorded in
 `.agent-harness/installation.yaml`. `execution: host-native` means the selected
 host owns inference, authentication, sessions, sandboxing, and tool execution.
 No provider SDK or duplicate model runtime is installed.
 
-Selected skills live in the host's native project directory. Native permission
-and hook configuration supplies project-level safety controls. The host-specific
-bridge uses the host session/conversation identifier as the run ID, applies the
-portable policy, allows scoped reads, asks for scoped writes, denies deletions
-and denied paths, and writes redacted metadata under
+Required and selected optional skills live in the host's native project directory.
+Native permission and hook configuration supplies project-level safety controls.
+The host-specific bridge uses the host session/conversation identifier as the run
+ID, applies the portable policy, allows scoped reads, asks for scoped writes,
+denies deletions and denied paths, and writes redacted metadata under
 `.agent-harness/audit/`.
 
 `config/policies.yaml` uses JSON-compatible YAML so the dependency-free hook
@@ -56,6 +59,15 @@ required `manage-project-scope` skill resolves the exact directory and updates
 `config/policies.yaml`, where `allowed_read_paths` and `allowed_write_paths`
 define portable scope. `denied_paths` continues to take precedence.
 
+The underlying command is the same for every supported host and operating system:
+
+```bash
+python3 scripts/update_scope.py \
+  --root /path/to/this/harness \
+  --path /path/to/project \
+  --access read
+```
+
 Policy scope does not override the selected host's native sandbox or workspace
 boundary. If the host still blocks the folder, add it through the host's normal
 workspace controls rather than weakening safety settings.
@@ -78,7 +90,16 @@ The required `skill-auditor` statically reviews candidate skills without
 executing them. `import-external-skill` imports a new skill from an immutable
 external source, while `import-template-skills` discovers new skills in stable
 tagged agent-template releases. Both preserve every installed ID and existing
-skill directory unchanged.
+skill directory unchanged: they never compare, update, merge, or overwrite local
+skills. Template discovery and import are manually triggered and never scheduled.
+
+Example requests:
+
+> Audit this skill ZIP before importing it.
+
+> Import this new skill from `/path/to/skill`.
+
+> Check the latest stable agent-template release for new skills.
 
 Plan approval applies only to the exact plan presented. A later state-changing
 request is new scope, even in the same conversation. Native tool approval is a

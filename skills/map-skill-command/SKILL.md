@@ -11,15 +11,19 @@ description: Create a project-level slash-command alias for an installed generat
    away, but do not otherwise guess or rename the command.
 3. Confirm the command name, target skill, and intended purpose. Refuse built-in command names,
    an existing capability ID, an existing command path, or aliases that target themselves.
-4. Run the bundled helper from this skill directory:
+4. Read the `map-skill-command` entry in `config/capabilities.yaml`, resolve its registered
+   `path` against the harness root, and run the bundled helper by absolute path:
 
    ```bash
-   uv run python scripts/map_command.py \
+   uv run python "/path/to/harness/<registered-skill-path>/scripts/map_command.py" \
      --root /path/to/harness \
      --command review \
      --skill evidence-gathering \
      --description "Review the requested change using direct evidence."
    ```
+
+   Do not shorten this to `/path/to/harness/scripts/map_command.py`; that project-level file does
+   not exist.
 
 5. Run `uv run python scripts/validate_harness.py` from the harness root.
 6. Report the created command and invocation syntax. The host exposes enabled skills in its
