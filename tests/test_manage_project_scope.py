@@ -41,6 +41,16 @@ class ManageProjectScopeTests(unittest.TestCase):
             text=True,
         )
 
+    def test_skill_invokes_bundled_helper_instead_of_project_scripts(self) -> None:
+        instructions = (self.script.parent.parent / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("<registered-skill-path>/scripts/update_scope.py", instructions)
+        self.assertIn("Treat the registry as authoritative", instructions)
+        self.assertIn(
+            "Do not run `/path/to/harness/scripts/update_scope.py`",
+            instructions,
+        )
+
     def test_adds_canonical_read_write_scope_and_preserves_denials(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             parent = Path(temporary)
