@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Auditor"
+  short_description: "Audit skills before installation or use"
+  default_prompt: "Use $skill-auditor to audit this skill and report its risks without modifying it."

@@ -410,6 +410,7 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
             "  • Protect denied paths and record redacted audit metadata.",
             "  • Add project folders through the manage-project-scope skill.",
             "  • Map short slash commands to installed skills with map-skill-command.",
+            "  • Audit skills and import only genuinely new skills from trusted sources.",
         )
     )
     try:
@@ -422,6 +423,8 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
             '\n  "Add /path/to/project to this harness with read-write access."'
         )
         print('  "Map /scope to the manage-project-scope skill."')
+        print('  "Audit this skill ZIP before importing it."')
+        print('  "Import new skills from the latest stable agent-template release."')
         print("These are examples, not required next steps or the limit of the harness.")
         return
     console = Console(no_color=no_color)
@@ -443,7 +446,9 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
             + "\n".join(f"  {step}" for step in next_steps)
             + '\n\nHere are some things you can try:\n  "Add '
             '/path/to/project to this harness with read-write access."\n  "Map /scope to '
-            'the manage-project-scope skill."\n\nThese illustrate two of many capabilities; '
+            'the manage-project-scope skill."\n  "Audit this skill ZIP before importing it."'
+            '\n  "Import new skills from the latest stable agent-template release."'
+            "\n\nThese illustrate a few of many capabilities; "
             "they are not required next steps. The harness can also plan, edit, review, "
             "validate, and document work within its configured skills and policies.",
             title="Ready",

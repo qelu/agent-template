@@ -11,6 +11,8 @@
     "run_identity",
     "documentation_provider",
     "capabilities",
+    "template",
+    "skill_imports",
     "environment",
     "external_commands",
     "validation"
@@ -26,6 +28,29 @@
       "type": "array",
       "uniqueItems": true,
       "items": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"}
+    },
+    "template": {
+      "type": "object",
+      "required": ["repository", "revision"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "skill_imports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["skill", "imported_at", "source", "audit_verdict"],
+        "properties": {
+          "skill": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+          "imported_at": {"type": "string", "minLength": 1},
+          "source": {"type": "object"},
+          "audit_verdict": {"enum": ["pass", "pass-with-warnings"]}
+        },
+        "additionalProperties": false
+      }
     },
     "environment": {
       "type": "object",

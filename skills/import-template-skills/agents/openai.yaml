@@ -1,0 +1,4 @@
+interface:
+  display_name: "Import Template Skills"
+  short_description: "Import new skills from a tagged template release"
+  default_prompt: "Use $import-template-skills to import skills added in the latest stable agent-template release."

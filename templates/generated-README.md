@@ -72,6 +72,14 @@ selected host's native skill directory and registers it in
 duplicate instructions or grant additional authority. Enabled skills appear in
 the host's command picker; Codex also supports explicit `$scope` invocation.
 
+## Audit and import skills
+
+The required `skill-auditor` statically reviews candidate skills without
+executing them. `import-external-skill` imports a new skill from an immutable
+external source, while `import-template-skills` discovers new skills in stable
+tagged agent-template releases. Both preserve every installed ID and existing
+skill directory unchanged.
+
 Plan approval applies only to the exact plan presented. A later state-changing
 request is new scope, even in the same conversation. Native tool approval is a
 separate host decision.

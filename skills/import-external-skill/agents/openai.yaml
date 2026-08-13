@@ -1,0 +1,4 @@
+interface:
+  display_name: "Import External Skill"
+  short_description: "Safely import a skill from another source"
+  default_prompt: "Use $import-external-skill to audit and import this new skill without changing installed skills."

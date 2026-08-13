@@ -41,6 +41,7 @@ HOST_INSTALL_COMMANDS = {
     "codex": ("npm", "install", "-g", "@openai/codex"),
     "claude-code": ("npm", "install", "-g", "@anthropic-ai/claude-code"),
 }
+TEMPLATE_REPOSITORY = "https://github.com/qelu/agent-template.git"
 SKILL_ROOTS = {
     "portable": Path(".agents/skills"),
     "codex": Path(".agents/skills"),
@@ -324,10 +325,10 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
             },
         )
         write_host_profile(staging, plan.spec.host, plan.documentation_provider)
-        write_receipt(staging, plan, validation="pending")
+        write_receipt(staging, plan, source=source, validation="pending")
         if plan.spec.install_dependencies:
             provision_and_validate(staging, plan)
-            write_receipt(staging, plan, validation="passed")
+            write_receipt(staging, plan, source=source, validation="passed")
         elif plan.spec.security_tools:
             _run(
                 ["gitleaks", "dir", ".", "--no-banner", "--redact", "--exit-code", "1"],
@@ -586,7 +587,23 @@ def register_documentation_capability(destination: Path, host: str, provider: st
     write_yaml(path, registry)
 
 
-def write_receipt(destination: Path, plan: InstallationPlan, *, validation: str) -> None:
+def _template_revision(source: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=source,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "unversioned"
+    return result.stdout.strip() or "unversioned"
+
+
+def write_receipt(
+    destination: Path, plan: InstallationPlan, *, source: Path, validation: str
+) -> None:
     receipt = destination / ".agent-harness" / "installation.yaml"
     receipt.parent.mkdir(exist_ok=True)
     payload = {
@@ -597,6 +614,11 @@ def write_receipt(destination: Path, plan: InstallationPlan, *, validation: str)
         "run_identity": "host-session",
         "documentation_provider": plan.documentation_provider,
         "capabilities": list(plan.capabilities),
+        "template": {
+            "repository": TEMPLATE_REPOSITORY,
+            "revision": _template_revision(source),
+        },
+        "skill_imports": [],
         "environment": {
             "python": plan.spec.python_version,
             "project_dependencies_installed": plan.spec.install_dependencies,

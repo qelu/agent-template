@@ -35,9 +35,37 @@ capabilities:
     description: Create project-level slash-command aliases for installed harness skills.
     when: Use when a user wants to map a slash command to an installed skill.
 
+  - id: skill-auditor
+    type: skill
+    status: active
+    path: skills/skill-auditor
+    description: Statically audit skills for safety, validity, dependencies, and portability.
+    when: Use before importing a skill or when reviewing a skill folder or ZIP.
+
+  - id: import-external-skill
+    type: skill
+    status: active
+    path: skills/import-external-skill
+    description: Safely audit and import a new skill from an immutable external source.
+    when: Use when a user explicitly asks to import a skill from a folder, ZIP, pinned URL, or pinned Git source.
+
+  - id: import-template-skills
+    type: skill
+    status: active
+    path: skills/import-template-skills
+    description: Import only new skills from a stable tagged agent-template release.
+    when: Use when a user explicitly asks to check for or import skills added to a tagged template release.
+
   - id: documentation-maintenance
     type: skill
     status: active
     path: skills/documentation-maintenance
     description: Maintain durable decisions and operational documentation without duplication.
     when: Use when behavior or architecture changes require durable project documentation.
+
+  - id: devoteam-branding
+    type: skill
+    status: active
+    path: skills/devoteam-branding
+    description: Apply and validate Devoteam branding across business artifacts.
+    when: Use when creating, rebranding, or auditing a Devoteam document, presentation, spreadsheet, PDF, CV, report, proposal, or visual asset.

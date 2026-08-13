@@ -1,0 +1,4 @@
+interface:
+  display_name: "Devoteam Branding"
+  short_description: "Apply Devoteam branding to business artifacts"
+  default_prompt: "Use $devoteam-branding to apply the official Devoteam brand system to this artifact and validate the result."
