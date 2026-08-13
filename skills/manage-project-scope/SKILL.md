@@ -15,12 +15,19 @@ description: Add an existing project folder to or inspect a generated agent harn
    - ask which one is intended when the request does not establish it.
 4. Present the exact path and access level before changing policy. Treat this edit as a scope
    expansion that requires the host's normal write approval.
-5. Change to this skill directory and run its bundled helper:
+5. Read `config/capabilities.yaml`, find the `manage-project-scope` entry, and resolve its
+   registered `path` against the harness root. Run the bundled helper from that skill directory
+   by absolute path:
 
    ```bash
-   python3 scripts/update_scope.py --root /path/to/harness --path /path/to/project --access read
+   python3 "/path/to/harness/<registered-skill-path>/scripts/update_scope.py" \
+     --root "/path/to/harness" --path "/path/to/project" --access read
    ```
 
+   For example, the registered path is normally
+   `.agents/skills/manage-project-scope` for Codex, Antigravity, and portable harnesses, and
+   `.claude/skills/manage-project-scope` for Claude Code. Treat the registry as authoritative.
+   Do not run `/path/to/harness/scripts/update_scope.py`; that project-level file does not exist.
    Use `--access read-write` when write access was explicitly established.
 6. Validate the result with `python3 scripts/validate_harness.py`. If project dependencies are
    available only through uv, use `uv run python scripts/validate_harness.py` instead.
