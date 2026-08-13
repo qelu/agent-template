@@ -47,6 +47,12 @@ The legacy `gemini-cli` argument is accepted as an alias for `antigravity`.
 Antigravity uses the `agy` binary and workspace assets under `.agents/`, as
 documented by Google.
 
+Host detection checks whether the host's terminal command is available on the
+current shell's `PATH`. For Codex, this checks the `codex` CLI command—not
+whether the Codex desktop app is installed. When `codex` is unavailable but
+`npm` is present, the wizard can add the npm-based CLI installation to the
+reviewed installation plan.
+
 ## Guardrails generated for every concrete host
 
 - One canonical agent contract with exact-scope plan approval semantics.

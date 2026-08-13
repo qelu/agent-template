@@ -53,6 +53,23 @@ DOCUMENTATION_PROVIDER_LABELS = {
     "gemini": "Gemini — connect the official Gemini documentation MCP server",
 }
 
+HOST_CLI_NAMES = {
+    "codex": "Codex",
+    "claude-code": "Claude Code",
+    "antigravity": "Antigravity",
+}
+
+
+def host_cli_unavailable_message(host: str, binary: str) -> str:
+    message = (
+        f"{HOST_CLI_NAMES[host]} CLI command (`{binary}`) is not available on this shell's PATH."
+    )
+    if host == "codex":
+        message += (
+            " This checks the terminal CLI only; the Codex desktop app may still be installed."
+        )
+    return message
+
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
@@ -287,18 +304,31 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
     host_binary = {"codex": "codex", "claude-code": "claude", "antigravity": "agy"}.get(host)
     if host_binary:
         if not shutil.which(host_binary):
+            console.print(host_cli_unavailable_message(host, host_binary), style="yellow")
             if host == "antigravity":
                 console.print(
-                    "Antigravity CLI (`agy`) is not installed. Use Google's official installer "
-                    "before running the generated harness.",
+                    "Use Google's official installer before running the generated harness.",
+                    style="yellow",
+                )
+            elif shutil.which("npm"):
+                install_host_tool = _ask(
+                    questionary.confirm(
+                        f"Install the {HOST_CLI_NAMES[host]} CLI globally with npm as part of "
+                        "this plan?",
+                        default=False,
+                    )
+                )
+            elif host == "codex":
+                console.print(
+                    "npm is also unavailable. Install the Codex CLI using the official guide: "
+                    "https://developers.openai.com/codex/cli/",
                     style="yellow",
                 )
             else:
-                install_host_tool = _ask(
-                    questionary.confirm(
-                        f"{host_binary} is not installed. Include its official global installation?",
-                        default=False,
-                    )
+                console.print(
+                    "npm is also unavailable. Install the CLI with its official installer "
+                    "before launching the generated harness.",
+                    style="yellow",
                 )
     return InitializationSpec(
         destination=Path(destination),
