@@ -56,6 +56,7 @@ flowchart LR
 | Hard safety checks | Host-specific pre-tool bridges apply one portable policy to allowed and denied paths, shell commands, and tool actions. |
 | Privacy-conscious audit | Hook events record hashes and metadata, never prompts, arguments, or secrets. |
 | Capability selection | Install the required core skills plus only the optional capabilities selected by the user. |
+| Integration selection | Opt into host-compatible external services without embedding credentials. |
 | Current documentation | Add provider-appropriate official documentation access in the host's native format. |
 | Transactional setup | Build and validate in a temporary sibling, then publish the destination atomically. |
 | Capability discovery | A small registry records each capability's ID, description, trigger, state, and path. |
@@ -92,7 +93,7 @@ The three layers remain independent:
 | Layer | Source | Responsibility |
 | --- | --- | --- |
 | Contract | `agent/AGENT.md` | Stable operating principles, authority, and instruction precedence. |
-| Configuration | `config/persona.yaml`, `config/policies.yaml`, `config/capabilities.yaml` | Declarative identity, action policy, path scope, and capability discovery. |
+| Configuration | `config/persona.yaml`, `config/policies.yaml`, `config/capabilities.yaml`, `config/integrations.yaml` | Declarative identity, action policy, path scope, capability discovery, and external-service selection. |
 | Enforcement | Native host settings plus `scripts/guardrails/*.py` | Parse native events and mechanically apply the portable policy. |
 
 The root `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` files generated for a host are
@@ -160,6 +161,7 @@ uv run python scripts/initialize_agent.py \
   --tone "clear and evidence-led" \
   --host claude-code \
   --capability evidence-gathering \
+  --integration jira-cloud \
   --install
 ```
 
@@ -181,6 +183,7 @@ agent/AGENT.md                     portable behavioral contract
 config/persona.yaml                identity, goal, language, and tone
 config/policies.yaml               portable authority and safety intent
 config/capabilities.yaml           selected capability manifest
+config/integrations.yaml           selected external-integration manifest
 scripts/guardrails/                shared policy evaluator plus one bridge per host
 scripts/update_scope.py            host-independent project-scope launcher
 scripts/validate_harness.py        generated-project conformance check
@@ -246,9 +249,21 @@ Optional packaged capabilities currently include `evidence-gathering`,
 `documentation-maintenance`, and `devoteam-branding`. The branding skill applies,
 rebrands, or audits business artifacts using current authenticated Devoteam sources
 when available; this public repository does not embed private assets or links. The
-wizard preselects active optional capabilities so users can deselect any they do not
-want. In non-interactive mode, omitting `--capability` includes all active optional
-capabilities; supplying the flag one or more times selects only those optional IDs.
+wizard preselects the optional defaults in `config/initializer.yaml` so users can
+deselect any they do not want. In non-interactive mode, omitting `--capability`
+preserves those defaults; supplying the flag one or more times selects only those
+optional IDs. Named bundles are transparent shortcuts for related capabilities and
+integrations; their expanded selections appear in the dry-run plan and receipt.
+
+## External integrations
+
+`config/integrations.yaml` is a separate, optional catalog for remote MCP servers,
+official provider CLIs, and host plugins. The initializer offers only active entries
+compatible with the selected host. Use `--integration ID` or `--bundle ID` to opt in.
+Generated projects contain the selected manifest and `docs/integrations.md`; remote
+MCP entries are merged into native host configuration. Credentials are never copied
+into the project, authentication remains pending until completed through the host or
+provider, and optional servers do not become required for host startup.
 
 From a generated harness, project scope can be updated consistently on every host:
 
@@ -309,7 +324,7 @@ unknown commands, and external side effects.
 
 ```text
 agent/       portable agent contract
-config/      source persona, portable policy, capabilities, and receipt schema
+config/      source persona, policy, capabilities, integrations, and receipt schema
 harness/     initializer and source validation
 scripts/     initializer, host guardrail, validation, and capability tools
 skills/      packaged source skills
@@ -320,7 +335,8 @@ tests/       host conformance and behavioral tests
 ## Roadmap
 
 - Expand conformance fixtures as host-native permission and hook surfaces evolve.
-- Add optional packaged hooks, workflows, runbooks, and MCP integrations.
+- Expand the optional catalog with reviewed hooks, workflows, runbooks, and
+  provider integrations.
 - Improve semantic plan-approval enforcement when hosts expose stable approval events.
 - Broaden release-upgrade coverage while preserving locally changed skills.
 

@@ -18,8 +18,10 @@ The following documented surfaces are public interfaces:
   shell, and audit semantics;
 - `config/capabilities.yaml` version 1.0 and its `id`, `type`, `status`, `path`,
   `description`, and `when` fields;
-- `config/initializer.yaml` version 1.0 and the initializer defaults and required
-  capability selection it controls;
+- `config/integrations.yaml` version 1.0 and its integration identity, trust,
+  authentication, host, and approval fields;
+- `config/initializer.yaml` version 1.0 and the required/default capability,
+  bundle, and environment selections it controls;
 - installation receipt schema 2.0 in
   `config/schemas/installation.schema.json`;
 - the generated `scripts/validate_harness.py` and `scripts/update_scope.py`

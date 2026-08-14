@@ -135,7 +135,8 @@ class InitializerCoreTests(unittest.TestCase):
             source = Path(temporary)
             (source / "config").mkdir()
             (source / "config" / "initializer.yaml").write_text(
-                "version: '1.0'\nrequired_capabilities: []\ndefaults:\n"
+                "version: '1.0'\nrequired_capabilities: []\n"
+                "default_capabilities: []\nbundles: {}\ndefaults:\n"
                 "  host: portable\n  python: '3.13'\n"
                 "  development_tools: true\n  security_tools: false\n"
             )
@@ -148,6 +149,68 @@ class InitializerCoreTests(unittest.TestCase):
             )
             (source / "skills" / "inactive").mkdir(parents=True)
             self.assertEqual(capability_choices(source), ())
+
+    def test_omitted_capabilities_preserve_configured_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            plan = resolve_plan(
+                self.root,
+                self.spec(Path(temporary) / "agent", capabilities=None),
+            )
+
+        self.assertTrue(
+            {"documentation-maintenance", "evidence-gathering", "devoteam-branding"}
+            <= set(plan.capabilities)
+        )
+
+    def test_remote_integration_is_merged_and_recorded_for_each_host(self) -> None:
+        integration = {
+            "id": "example-cloud",
+            "status": "active",
+            "kind": "remote-mcp",
+            "provider": "Example",
+            "description": "Read example cloud records.",
+            "official_source": "https://example.com/mcp",
+            "auth": "oauth",
+            "hosts": ["codex", "claude-code", "antigravity"],
+            "default_approval": "writes",
+            "required": False,
+            "data_classes": ["records"],
+            "write_capable": True,
+            "endpoint": "https://example.com/mcp",
+        }
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("harness.initializer._load_source_integrations", return_value=[integration]),
+        ):
+            root = Path(temporary)
+            destinations: dict[str, Path] = {}
+            for host in ("codex", "claude-code", "antigravity"):
+                destination = root / host
+                plan = resolve_plan(
+                    self.root,
+                    self.spec(
+                        destination,
+                        host=host,
+                        documentation_provider="none",
+                        integrations=("example-cloud",),
+                    ),
+                )
+                execute_plan(self.root, plan)
+                destinations[host] = destination
+
+            codex_config = (destinations["codex"] / ".codex/config.toml").read_text()
+            claude_config = json.loads((destinations["claude-code"] / ".mcp.json").read_text())
+            antigravity_config = json.loads(
+                (destinations["antigravity"] / ".agents/mcp_config.json").read_text()
+            )
+            receipt = yaml.safe_load(
+                (destinations["codex"] / ".agent-harness/installation.yaml").read_text()
+            )
+            self.assertIn("[mcp_servers.example-cloud]", codex_config)
+            self.assertIn("example-cloud", claude_config["mcpServers"])
+            self.assertIn("example-cloud", antigravity_config["mcpServers"])
+            self.assertEqual(receipt["integrations"][0]["authentication"], "pending")
+            self.assertTrue((destinations["codex"] / "docs/integrations.md").is_file())
 
     def test_missing_host_install_is_explicit_and_uses_official_package(self) -> None:
         def find(command: str) -> str | None:

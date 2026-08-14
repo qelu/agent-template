@@ -32,6 +32,21 @@ SKILL_ROOTS = {
 PLACEHOLDER = re.compile(r"__[A-Z][A-Z0-9_]*__")
 CAPABILITY_FIELDS = {"id", "type", "status", "path", "description", "when"}
 CAPABILITY_STATUSES = {"active", "experimental", "disabled"}
+INTEGRATION_FIELDS = {
+    "id",
+    "status",
+    "kind",
+    "provider",
+    "description",
+    "official_source",
+    "auth",
+    "hosts",
+    "default_approval",
+    "required",
+    "data_classes",
+    "write_capable",
+    "endpoint",
+}
 
 
 def _load_yaml(path: Path) -> dict[str, object]:
@@ -86,6 +101,7 @@ def main() -> int:
         "config/policies.yaml",
         "scripts/update_scope.py",
         "config/capabilities.yaml",
+        "config/integrations.yaml",
         "scripts/guardrails/core.py",
         "scripts/guardrails/codex.py",
         "scripts/guardrails/claude_code.py",
@@ -128,6 +144,20 @@ def main() -> int:
                 errors.append("Imported skill receipt has an invalid audit verdict")
             if not isinstance(item.get("source"), dict):
                 errors.append("Imported skill receipt source must be a mapping")
+    if not isinstance(receipt.get("bundles"), list):
+        errors.append("Installation receipt bundles must be a list")
+    receipt_integrations = receipt.get("integrations")
+    if not isinstance(receipt_integrations, list):
+        errors.append("Installation receipt integrations must be a list")
+        receipt_integrations = []
+    else:
+        for item in receipt_integrations:
+            if not isinstance(item, dict) or set(item) != {
+                "id",
+                "kind",
+                "authentication",
+            }:
+                errors.append("Installation receipt contains an invalid integration entry")
     host = str(receipt.get("host", ""))
     if host not in HOST_FILES:
         errors.append(f"Unsupported receipt host: {host or '<missing>'}")
@@ -174,6 +204,49 @@ def main() -> int:
                 )
     except (OSError, ValueError, yaml.YAMLError) as exc:
         errors.append(str(exc))
+
+    try:
+        integration_catalog = _load_yaml(ROOT / "config" / "integrations.yaml")
+        integrations = integration_catalog.get("integrations", [])
+        if integration_catalog.get("version") != "1.0" or not isinstance(integrations, list):
+            raise ValueError("config/integrations.yaml must declare version 1.0 and a list")
+        configured_ids: set[str] = set()
+        for integration in integrations:
+            if not isinstance(integration, dict) or set(integration) != INTEGRATION_FIELDS:
+                errors.append("Integration entry has invalid fields")
+                continue
+            integration_id = str(integration["id"])
+            configured_ids.add(integration_id)
+            if host not in integration["hosts"]:
+                errors.append(f"Integration {integration_id} does not support host {host}")
+            if integration["kind"] != "remote-mcp":
+                continue
+            if host == "codex":
+                config = tomllib.loads((ROOT / ".codex/config.toml").read_text())
+                configured = config.get("mcp_servers", {})
+            elif host == "claude-code":
+                config = json.loads((ROOT / ".mcp.json").read_text())
+                configured = config.get("mcpServers", {})
+            elif host == "antigravity":
+                config = json.loads((ROOT / ".agents/mcp_config.json").read_text())
+                configured = config.get("mcpServers", {})
+            else:
+                configured = {}
+            if integration_id not in configured:
+                errors.append(f"Remote MCP integration is not configured: {integration_id}")
+        receipt_ids = {
+            str(item.get("id")) for item in receipt_integrations if isinstance(item, dict)
+        }
+        if receipt_ids != configured_ids:
+            errors.append("Installation receipt integrations do not match the catalog")
+    except (
+        OSError,
+        ValueError,
+        json.JSONDecodeError,
+        tomllib.TOMLDecodeError,
+        yaml.YAMLError,
+    ) as exc:
+        errors.append(f"Invalid integration configuration: {exc}")
 
     for path in ROOT.rglob("*"):
         if not path.is_file() or any(part in {".git", ".venv"} for part in path.parts):

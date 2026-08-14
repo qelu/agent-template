@@ -29,6 +29,25 @@
       "uniqueItems": true,
       "items": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"}
     },
+    "bundles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"}
+    },
+    "integrations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "authentication"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+          "kind": {"enum": ["remote-mcp", "official-cli", "plugin"]},
+          "authentication": {"enum": ["pending", "not-required", "verified"]}
+        },
+        "additionalProperties": false
+      }
+    },
     "template": {
       "type": "object",
       "required": ["repository", "revision"],
