@@ -30,6 +30,48 @@ Use imperative commit subjects, keep unrelated work in separate commits, and do
 not commit generated caches, credentials, local environment files, or secrets.
 Maintainers may squash merge a pull request to keep release history concise.
 
+## Contributing a capability
+
+Propose a capability when it adds reusable behavior rather than project-specific
+instructions. Skills package model-facing procedures, workflows package reusable
+automation, and runbooks document repeatable operator procedures. Open an issue
+before implementing a capability that introduces a dependency, external service,
+new write target, authentication requirement, or material policy change.
+
+Scaffold the contribution from the repository root:
+
+```bash
+uv run python scripts/create_extension.py \
+  --type skill \
+  --id summarize-evidence \
+  --name "Summarize Evidence"
+```
+
+Use `workflow` or `runbook` instead of `skill` when appropriate. Skill and
+workflow scaffolds are registered in `config/capabilities.yaml` with an
+`experimental` status. Keep the generated ID, path, description, and `when`
+trigger accurate as the implementation evolves. Runbooks are not registered as
+selectable capabilities.
+
+A capability pull request must:
+
+- explain the user need, trigger, expected behavior, and why the capability is
+  reusable;
+- identify permissions, write targets, external services, dependencies, trust
+  boundaries, and failure behavior;
+- contain no credentials, private links, personal data, or unlicensed assets;
+- include focused tests and documentation, including generated-host coverage
+  whenever installation or native host behavior changes;
+- keep the default generated harness small and provider-neutral; and
+- report the complete validation commands and results in the pull request.
+
+Promote a registered capability from `experimental` to `active` only after its
+implementation, safety review, tests, and documentation are complete. Make the
+promotion in the same reviewed pull request so Git records the evidence and
+approval together. Maintainers may keep a capability experimental, request a
+narrower scope, or decline it when its authority or maintenance cost is not
+justified by the reusable value.
+
 ## Compatibility and releases
 
 The project follows Semantic Versioning. Preserve documented 1.x interfaces within
