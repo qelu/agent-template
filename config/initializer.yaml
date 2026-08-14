@@ -7,6 +7,11 @@ required_capabilities:
   - skill-auditor
   - import-external-skill
   - import-template-skills
+default_capabilities:
+  - evidence-gathering
+  - documentation-maintenance
+  - devoteam-branding
+bundles: {}
 defaults:
   host: claude-code
   python: "3.13"

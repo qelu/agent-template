@@ -20,9 +20,11 @@ The system Python is never replaced.
 3. **Persona** — goal, role, tone, and language.
 4. **Host** — Codex, Claude Code, Antigravity, or portable.
 5. **Documentation** — OpenAI, Anthropic, Gemini, or none.
-6. **Capabilities** — required safety skills and selected optional packages.
-7. **Environment** — Python, development tools, Gitleaks, and optional host CLI.
-8. **Review** — exact files and external commands before confirmation.
+6. **Bundles** — optional, transparent shortcuts for related additions.
+7. **Capabilities** — required safety skills and selected optional packages.
+8. **Integrations** — active external services supported by the chosen host.
+9. **Environment** — Python, development tools, Gitleaks, and optional host CLI.
+10. **Review** — exact selections and external commands before confirmation.
 
 Use arrows for selection, Space to toggle checkboxes, Enter to continue, and
 Ctrl+C to cancel without creating the destination.
@@ -73,6 +75,7 @@ The portable configuration copied into every generated project is:
 - `config/policies.yaml` for action decisions, allowed paths, denied paths, shell
   denials, and audit enablement;
 - `config/capabilities.yaml` for the selected discovery manifest.
+- `config/integrations.yaml` for selected optional external services.
 
 `agent/AGENT.md` remains the separate, stable contract. The generated root host
 file only directs the selected host to that contract, while native settings and
@@ -164,11 +167,12 @@ Users can trigger the management skills in plain language, for example:
 The last request performs discovery only when the user asks to check. Importing is
 a separate explicit intent, and no template import runs automatically.
 
-Active optional capabilities
-are read from the lightweight source registry and copied to the native skill
-directory. They are preselected in the wizard and can be deselected. In
-non-interactive mode, omitting `--capability` includes all active optional
-capabilities; using the flag selects only the repeated optional IDs:
+Active optional capabilities are read from the lightweight source registry and
+copied to the native skill directory. Entries listed in
+`default_capabilities` are preselected in the wizard and used when
+`--capability` is omitted. Repeating the flag selects only those optional IDs.
+Bundles in `config/initializer.yaml` expand into visible capability and integration
+selections; selecting one never hides what will be installed.
 
 `devoteam-branding` is an optional capability for creating, rebranding, and
 auditing Devoteam documents, presentations, spreadsheets, PDFs, CVs, reports,
@@ -190,6 +194,22 @@ The permitted states are `active`, `experimental`, and `disabled`. Only active
 capabilities are offered by the initializer. Tests remain ordinary repository
 tests instead of fields in the capability manifest.
 
+## Optional integrations
+
+External services are described separately in `config/integrations.yaml`. Each
+entry declares its provider, kind, official source, authentication model,
+supported hosts, data classes, write capability, endpoint where applicable, and
+default approval posture. The wizard offers only active entries supported by the
+selected host. Non-interactive callers repeat `--integration ID`, or use
+`--bundle ID` as a reviewed shortcut.
+
+The initializer never asks for or writes credentials. It merges selected remote
+MCP servers into native host configuration with optional startup behavior and
+writes `docs/integrations.md` for post-generation authentication, read-only smoke
+testing, scope review, and write-confirmation checks. The installation receipt
+records each selection with authentication initially `pending` unless none is
+required.
+
 ## Installation scope
 
 | Requirement | Behavior |
@@ -208,7 +228,7 @@ tests instead of fields in the capability manifest.
 
 Generation occurs in a temporary sibling directory. The initializer:
 
-1. resolves the host, documentation provider, and capabilities;
+1. resolves the host, documentation provider, capabilities, bundles, and integrations;
 2. copies only the portable contract and selected source assets;
 3. writes native host settings, permissions, hooks, MCP, and skill locations;
 4. replaces identity placeholders and writes a pending receipt;
@@ -227,7 +247,7 @@ supplied empty destination unchanged.
 - canonical host
 - `execution: host-native`
 - `run_identity: host-session`
-- documentation provider and selected capabilities
+- documentation provider, bundles, selected capabilities, and integrations
 - template repository and initialized revision
 - immutable provenance and audit verdicts for subsequently imported skills
 - environment and security-tool choices
@@ -248,6 +268,7 @@ uv run python scripts/initialize_agent.py \
   --host antigravity \
   --docs-provider gemini \
   --capability evidence-gathering \
+  --integration jira-cloud \
   --python 3.13 \
   --install
 ```
@@ -259,7 +280,9 @@ uv run python scripts/initialize_agent.py \
 | `--name`, `--id`, `--goal`, `--role`, `--tone`, `--language` | Identity and persona. |
 | `--host` | `portable`, `codex`, `claude-code`, `antigravity`, or alias `gemini-cli`. |
 | `--docs-provider` | `none`, `openai`, `anthropic`, or `gemini`. |
-| `--capability ID` | Select an optional capability; repeat for more. If omitted, include all active optional capabilities. |
+| `--capability ID` | Select an optional capability; repeat for more. If omitted, use configured optional defaults. |
+| `--integration ID` | Configure an active host-compatible integration; repeat for more. |
+| `--bundle ID` | Include a named bundle of capabilities and integrations; repeat for more. |
 | `--python VERSION` | Python 3.11–3.14 passed to `uv`; defaults to 3.13. |
 | `--install` | Provision and validate the generated project. |
 | `--dev-tools` / `--no-dev-tools` | Include or omit development tools. |

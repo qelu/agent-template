@@ -72,6 +72,17 @@ approval together. Maintainers may keep a capability experimental, request a
 narrower scope, or decline it when its authority or maintenance cost is not
 justified by the reusable value.
 
+## Contributing an integration
+
+Register external services in `config/integrations.yaml`, independently from
+model-facing capabilities. Use an official remote MCP, provider CLI, or host plugin;
+link its authoritative setup source and declare authentication, supported hosts,
+data classes, write capability, endpoint, and default approval posture. Integration
+changes must include native-host generation tests plus setup, smoke-test, and revoke
+guidance. Never commit credentials or make an optional integration required for host
+startup. Add it to a bundle only when that shortcut remains understandable in the
+initializer's expanded plan.
+
 ## Compatibility and releases
 
 The project follows Semantic Versioning. Preserve documented 1.x interfaces within

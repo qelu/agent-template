@@ -17,6 +17,7 @@ from typing import Any
 import yaml
 
 from harness.registry import CapabilityError, load_capabilities
+from harness.integrations import IntegrationError, load_integrations
 
 
 TEXT_SUFFIXES = {"", ".md", ".yaml", ".yml", ".json", ".toml", ".lock", ".py", ".txt"}
@@ -98,6 +99,8 @@ class InitializationSpec:
     host: str = "portable"
     documentation_provider: str | None = None
     capabilities: tuple[str, ...] | None = None
+    integrations: tuple[str, ...] = ()
+    bundles: tuple[str, ...] = ()
     python_version: str = "3.13"
     install_dependencies: bool = False
     development_tools: bool = True
@@ -111,6 +114,15 @@ class CapabilityChoice:
     capability_type: str
     description: str
     required: bool
+    selected_by_default: bool
+
+
+@dataclass(frozen=True)
+class IntegrationChoice:
+    integration_id: str
+    kind: str
+    description: str
+    selected_by_default: bool = False
 
 
 @dataclass(frozen=True)
@@ -128,6 +140,8 @@ class InstallationPlan:
     spec: InitializationSpec
     documentation_provider: str
     capabilities: tuple[str, ...]
+    integrations: tuple[str, ...]
+    bundles: tuple[str, ...]
     tools: tuple[ToolStatus, ...]
     external_commands: tuple[tuple[str, ...], ...]
 
@@ -151,9 +165,18 @@ def _load_source_capabilities(source: Path) -> list[dict[str, Any]]:
         raise InitializerError(str(exc)) from exc
 
 
+def _load_source_integrations(source: Path) -> list[dict[str, Any]]:
+    try:
+        return load_integrations(source)
+    except (IntegrationError, OSError, ValueError) as exc:
+        raise InitializerError(str(exc)) from exc
+
+
 def capability_choices(source: Path) -> tuple[CapabilityChoice, ...]:
     capabilities = _load_source_capabilities(source)
-    required = set(load_initializer_config(source)["required_capabilities"])
+    initializer = load_initializer_config(source)
+    required = set(initializer["required_capabilities"])
+    defaults = set(initializer["default_capabilities"])
     registered = {str(item["id"]) for item in capabilities}
     unknown_required = sorted(required - registered)
     if unknown_required:
@@ -167,6 +190,18 @@ def capability_choices(source: Path) -> tuple[CapabilityChoice, ...]:
         raise InitializerError(
             "Initializer requires inactive capabilities: " + ", ".join(inactive_required)
         )
+    unknown_defaults = sorted(defaults - registered)
+    if unknown_defaults:
+        raise InitializerError(
+            "Initializer defaults include unknown capabilities: " + ", ".join(unknown_defaults)
+        )
+    inactive_defaults = sorted(
+        defaults - {str(item["id"]) for item in capabilities if item.get("status") == "active"}
+    )
+    if inactive_defaults:
+        raise InitializerError(
+            "Initializer defaults include inactive capabilities: " + ", ".join(inactive_defaults)
+        )
     choices: list[CapabilityChoice] = []
     for item in capabilities:
         if item.get("status") != "active":
@@ -177,6 +212,23 @@ def capability_choices(source: Path) -> tuple[CapabilityChoice, ...]:
                 capability_type=str(item["type"]),
                 description=str(item["description"]),
                 required=str(item["id"]) in required,
+                selected_by_default=str(item["id"]) in defaults,
+            )
+        )
+    return tuple(choices)
+
+
+def integration_choices(source: Path, host: str) -> tuple[IntegrationChoice, ...]:
+    canonical_host = HOST_ALIASES.get(host, host)
+    choices: list[IntegrationChoice] = []
+    for item in _load_source_integrations(source):
+        if item["status"] != "active" or canonical_host not in item["hosts"]:
+            continue
+        choices.append(
+            IntegrationChoice(
+                integration_id=str(item["id"]),
+                kind=str(item["kind"]),
+                description=str(item["description"]),
             )
         )
     return tuple(choices)
@@ -187,9 +239,31 @@ def load_initializer_config(source: Path) -> dict[str, Any]:
     if not isinstance(payload, dict) or payload.get("version") != "1.0":
         raise InitializerError("config/initializer.yaml must declare version 1.0")
     required = payload.get("required_capabilities")
+    default_capabilities = payload.get("default_capabilities")
+    bundles = payload.get("bundles")
     defaults = payload.get("defaults")
     if not isinstance(required, list) or not all(isinstance(item, str) for item in required):
         raise InitializerError("Initializer required_capabilities must be a list of IDs")
+    if not isinstance(default_capabilities, list) or not all(
+        isinstance(item, str) for item in default_capabilities
+    ):
+        raise InitializerError("Initializer default_capabilities must be a list of IDs")
+    if not isinstance(bundles, dict):
+        raise InitializerError("Initializer bundles must be a mapping")
+    for bundle_id, bundle in bundles.items():
+        if not isinstance(bundle_id, str) or not isinstance(bundle, dict):
+            raise InitializerError("Initializer bundles require string IDs and mappings")
+        if slug(bundle_id) != bundle_id:
+            raise InitializerError(f"Initializer bundle has invalid ID: {bundle_id}")
+        if set(bundle) != {"description", "capabilities", "integrations"}:
+            raise InitializerError(f"Initializer bundle {bundle_id} has invalid fields")
+        if not isinstance(bundle["description"], str) or not bundle["description"].strip():
+            raise InitializerError(f"Initializer bundle {bundle_id} requires a description")
+        for field in ("capabilities", "integrations"):
+            if not isinstance(bundle[field], list) or not all(
+                isinstance(item, str) for item in bundle[field]
+            ):
+                raise InitializerError(f"Initializer bundle {bundle_id} has invalid {field}")
     if not isinstance(defaults, dict):
         raise InitializerError("Initializer defaults must be a mapping")
     expected = {"host": str, "python": str, "development_tools": bool, "security_tools": bool}
@@ -244,11 +318,45 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
 
     choices = capability_choices(source)
     by_id = {choice.capability_id: choice for choice in choices}
-    selected = set(by_id) if normalized.capabilities is None else set(normalized.capabilities)
+    initializer = load_initializer_config(source)
+    bundles = initializer["bundles"]
+    unknown_bundles = sorted(set(normalized.bundles) - set(bundles))
+    if unknown_bundles:
+        raise InitializerError(f"Unknown bundles: {', '.join(unknown_bundles)}")
+    bundled_capabilities = {
+        item for bundle_id in normalized.bundles for item in bundles[bundle_id]["capabilities"]
+    }
+    bundled_integrations = {
+        item for bundle_id in normalized.bundles for item in bundles[bundle_id]["integrations"]
+    }
+    selected = (
+        set(initializer["default_capabilities"])
+        if normalized.capabilities is None
+        else set(normalized.capabilities)
+    )
+    selected.update(bundled_capabilities)
     unknown = sorted(selected - set(by_id))
     if unknown:
         raise InitializerError(f"Unknown capabilities: {', '.join(unknown)}")
     selected.update(choice.capability_id for choice in choices if choice.required)
+
+    integrations = _load_source_integrations(source)
+    active_integrations = {
+        str(item["id"]): item for item in integrations if item["status"] == "active"
+    }
+    selected_integrations = set(normalized.integrations) | bundled_integrations
+    unknown_integrations = sorted(selected_integrations - set(active_integrations))
+    if unknown_integrations:
+        raise InitializerError(f"Unknown integrations: {', '.join(unknown_integrations)}")
+    incompatible = sorted(
+        integration_id
+        for integration_id in selected_integrations
+        if host not in active_integrations[integration_id]["hosts"]
+    )
+    if incompatible:
+        raise InitializerError(
+            f"Integrations do not support host {host}: {', '.join(incompatible)}"
+        )
     tools_to_check = ["git", "uv"]
     host_command = HOST_COMMANDS.get(host)
     if host_command:
@@ -284,7 +392,13 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
             raise InitializerError(f"{command[0]} is required to install the selected host tool")
         external_commands.append(command)
     return InstallationPlan(
-        normalized, provider, tuple(sorted(selected)), statuses, tuple(external_commands)
+        normalized,
+        provider,
+        tuple(sorted(selected)),
+        tuple(sorted(selected_integrations)),
+        tuple(sorted(set(normalized.bundles))),
+        statuses,
+        tuple(external_commands),
     )
 
 
@@ -326,6 +440,7 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
             },
         )
         write_host_profile(staging, plan.spec.host, plan.documentation_provider)
+        write_integration_configuration(staging, plan, source)
         write_receipt(staging, plan, source=source, validation="pending")
         if plan.spec.install_dependencies:
             provision_and_validate(staging, plan)
@@ -418,6 +533,16 @@ def copy_host_native_template(source: Path, destination: Path, plan: Installatio
         )
     write_yaml(
         destination / "config" / "capabilities.yaml", {"version": "1.0", "capabilities": manifest}
+    )
+    selected_integrations = set(plan.integrations)
+    integration_manifest = [
+        item
+        for item in _load_source_integrations(source)
+        if str(item["id"]) in selected_integrations
+    ]
+    write_yaml(
+        destination / "config" / "integrations.yaml",
+        {"version": "1.0", "integrations": integration_manifest},
     )
 
 
@@ -534,19 +659,89 @@ def write_mcp_configuration(destination: Path, host: str, provider: str) -> Path
         raise InitializerError("MCP documentation requires a concrete --host")
     server = DOCUMENTATION_SERVERS[provider]
     server_id, url = str(server["id"]), str(server["url"])
+    return _add_remote_mcp(destination, host, server_id, url)
+
+
+def _add_remote_mcp(
+    destination: Path,
+    host: str,
+    server_id: str,
+    url: str,
+    *,
+    approval: str | None = None,
+) -> Path:
     if host == "codex":
         path = destination / ".codex" / "config.toml"
         with path.open("a", encoding="utf-8") as stream:
             stream.write(f'\n[mcp_servers.{server_id}]\nurl = "{url}"\n')
+            if approval:
+                stream.write("required = false\n")
+                stream.write(f'default_tools_approval_mode = "{approval}"\n')
         return path
     if host == "claude-code":
         path = destination / ".mcp.json"
-        payload = {"mcpServers": {server_id: {"type": "http", "url": url}}}
+        payload = (
+            json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"mcpServers": {}}
+        )
+        payload.setdefault("mcpServers", {})[server_id] = {"type": "http", "url": url}
     else:
         path = destination / ".agents" / "mcp_config.json"
-        payload = {"mcpServers": {server_id: {"serverUrl": url}}}
+        payload = (
+            json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"mcpServers": {}}
+        )
+        payload.setdefault("mcpServers", {})[server_id] = {"serverUrl": url}
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def write_integration_configuration(
+    destination: Path, plan: InstallationPlan, source: Path
+) -> None:
+    if not plan.integrations:
+        return
+    by_id = {str(item["id"]): item for item in _load_source_integrations(source)}
+    lines = [
+        "# Selected integrations",
+        "",
+        "Authentication is completed after generation through the selected host or provider.",
+        "No credentials are stored in this project.",
+        "",
+    ]
+    for integration_id in plan.integrations:
+        integration = by_id[integration_id]
+        if integration["kind"] == "remote-mcp":
+            _add_remote_mcp(
+                destination,
+                plan.spec.host,
+                integration_id,
+                str(integration["endpoint"]),
+                approval=str(integration["default_approval"]),
+            )
+        lines.extend(
+            (
+                f"## {integration_id}",
+                "",
+                str(integration["description"]),
+                "",
+                f"- Provider: {integration['provider']}",
+                f"- Kind: {integration['kind']}",
+                "- Authentication: "
+                + (
+                    "not required"
+                    if integration["auth"] == "none"
+                    else f"{integration['auth']} (pending)"
+                ),
+                f"- Default approval: {integration['default_approval']}",
+                f"- Official source: {integration['official_source']}",
+                "",
+                "Review the provider's authorization scopes, authenticate, test a read-only action,",
+                "and confirm write prompts before enabling production use.",
+                "",
+            )
+        )
+    path = destination / "docs" / "integrations.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def write_anthropic_documentation_skill(destination: Path, host: str) -> Path:
@@ -608,6 +803,7 @@ def write_receipt(
 ) -> None:
     receipt = destination / ".agent-harness" / "installation.yaml"
     receipt.parent.mkdir(exist_ok=True)
+    integrations = {str(item["id"]): item for item in _load_source_integrations(source)}
     payload = {
         "schema_version": "2.0",
         "agent_id": plan.spec.agent_id,
@@ -616,6 +812,17 @@ def write_receipt(
         "run_identity": "host-session",
         "documentation_provider": plan.documentation_provider,
         "capabilities": list(plan.capabilities),
+        "bundles": list(plan.bundles),
+        "integrations": [
+            {
+                "id": integration_id,
+                "kind": integrations[integration_id]["kind"],
+                "authentication": (
+                    "not-required" if integrations[integration_id]["auth"] == "none" else "pending"
+                ),
+            }
+            for integration_id in plan.integrations
+        ],
         "template": {
             "repository": TEMPLATE_REPOSITORY,
             "revision": _template_revision(source),

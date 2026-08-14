@@ -5,6 +5,12 @@ the project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Added separate optional integration and bundle catalogs, initializer flags and
+  wizard selection, native remote-MCP configuration, setup guidance, receipts,
+  validation, and trust-boundary documentation.
+
 ### Changed
 
 - Aligned source, initializer, generated-project, contribution, release, and

@@ -9,7 +9,8 @@ review before publishing a new major version.
 - [ ] Classify the release as patch, minor, or major using
   `docs/compatibility.md`.
 - [ ] Inventory changes to the initializer CLI, configuration versions,
-  installation receipt, generated paths, skills, and host hook contracts.
+  installation receipt, generated paths, skills, integrations, bundles, and host
+  hook contracts.
 - [ ] Add deprecation and migration guidance for every affected public interface.
 - [ ] Confirm the version agrees in `pyproject.toml`, the README badge,
   `CHANGELOG.md`, and the planned tag.
@@ -21,7 +22,7 @@ review before publishing a new major version.
 - [ ] Run a clean initializer dry run and installed generation for every supported
   host profile.
 - [ ] Validate the generated harnesses and inspect their native configuration,
-  hook events, capability selection, receipt, and documentation.
+  hook events, capability and integration selection, receipt, and documentation.
 - [ ] Exercise migrations described for this release against a representative
   harness from the previous supported version.
 - [ ] Run the complete local suite:
@@ -41,6 +42,8 @@ git diff --check
 
 - [ ] Review policy, permission, hook, authentication, write-target, and external
   side-effect changes.
+- [ ] Verify every active integration still uses its official source and current
+  endpoint, requests no embedded credential, and has a documented revoke path.
 - [ ] Confirm generated Actions use immutable commit SHAs and least-privilege
   permissions.
 - [ ] Review dependency and lockfile changes and address known vulnerabilities.

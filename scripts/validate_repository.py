@@ -21,6 +21,7 @@ from harness.initializer import (  # noqa: E402
     capability_choices,
     load_initializer_config,
 )
+from harness.integrations import IntegrationError, load_integrations  # noqa: E402
 from harness.policy import PolicyError, load_policy  # noqa: E402
 from harness.registry import CapabilityError, load_capabilities  # noqa: E402
 
@@ -39,6 +40,7 @@ REQUIRED = (
     "agent/AGENT.md",
     "config/capabilities.yaml",
     "config/initializer.yaml",
+    "config/integrations.yaml",
     "config/persona.yaml",
     "config/policies.yaml",
     "config/schemas/installation.schema.json",
@@ -46,6 +48,7 @@ REQUIRED = (
     "docs/releasing.md",
     "harness/configuration.py",
     "harness/initializer.py",
+    "harness/integrations.py",
     "harness/policy.py",
     "harness/registry.py",
     "scripts/guardrails/core.py",
@@ -117,6 +120,12 @@ def main() -> int:
     except (InitializerError, OSError, ValueError) as exc:
         errors.append(str(exc))
 
+    try:
+        integrations = load_integrations(ROOT)
+    except (IntegrationError, ConfigurationError, OSError, ValueError) as exc:
+        errors.append(str(exc))
+        integrations = []
+
     receipt = ROOT / ".agent-harness" / "installation.yaml"
     if receipt.exists():
         try:
@@ -131,6 +140,23 @@ def main() -> int:
     except (CapabilityError, ConfigurationError, OSError, ValueError) as exc:
         errors.append(str(exc))
         capabilities = []
+
+    capability_ids = {str(item["id"]) for item in capabilities if item.get("status") == "active"}
+    integration_ids = {str(item["id"]) for item in integrations if item.get("status") == "active"}
+    if "initializer" in locals():
+        for bundle_id, bundle in initializer["bundles"].items():
+            unknown_capabilities = sorted(set(bundle["capabilities"]) - capability_ids)
+            unknown_integrations = sorted(set(bundle["integrations"]) - integration_ids)
+            if unknown_capabilities:
+                errors.append(
+                    f"Bundle {bundle_id} references inactive or unknown capabilities: "
+                    + ", ".join(unknown_capabilities)
+                )
+            if unknown_integrations:
+                errors.append(
+                    f"Bundle {bundle_id} references inactive or unknown integrations: "
+                    + ", ".join(unknown_integrations)
+                )
 
     try:
         load_policy(ROOT)

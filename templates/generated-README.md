@@ -26,6 +26,12 @@ The installation choices are recorded in
 host owns inference, authentication, sessions, sandboxing, and tool execution.
 No provider SDK or duplicate model runtime is installed.
 
+Optional external services selected during initialization are listed in
+`config/integrations.yaml`. When the list is non-empty, follow
+`docs/integrations.md` to review scopes, authenticate through the host or provider,
+test a read-only operation, and confirm write prompts. The project contains no
+integration credentials.
+
 Required and selected optional skills live in the host's native project directory.
 Native permission and hook configuration supplies project-level safety controls.
 The host-specific bridge uses the host session/conversation identifier as the run

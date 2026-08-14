@@ -25,6 +25,7 @@ from harness.initializer import (  # noqa: E402
     capability_choices,
     destination_error,
     execute_plan,
+    integration_choices,
     load_initializer_config,
     resolve_plan,
     slug,
@@ -89,6 +90,18 @@ def parser() -> argparse.ArgumentParser:
         dest="capabilities",
         help="include a capability; repeat as needed (required capabilities are automatic)",
     )
+    result.add_argument(
+        "--integration",
+        action="append",
+        dest="integrations",
+        help="configure an optional integration; repeat as needed",
+    )
+    result.add_argument(
+        "--bundle",
+        action="append",
+        dest="bundles",
+        help="include a named capability and integration bundle; repeat as needed",
+    )
     result.add_argument("--python", dest="python_version", default="3.13")
     result.add_argument("--install", action="store_true", help="create the project environment")
     result.add_argument(
@@ -134,6 +147,8 @@ def cli_spec(args: argparse.Namespace) -> InitializationSpec:
         host=args.host,
         documentation_provider=args.docs_provider,
         capabilities=None if args.capabilities is None else tuple(args.capabilities),
+        integrations=tuple(args.integrations or ()),
+        bundles=tuple(args.bundles or ()),
         python_version=args.python_version,
         install_dependencies=args.install,
         development_tools=args.dev_tools,
@@ -156,7 +171,8 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
     console = Console(no_color=no_color)
     console.print(Panel.fit(ASCII_ART, border_style="cyan", subtitle="Governed by construction"))
     console.print("Build a portable, least-authority agent harness.\n", style="dim")
-    defaults = load_initializer_config(source)["defaults"]
+    initializer = load_initializer_config(source)
+    defaults = initializer["defaults"]
 
     console.print("[bold cyan]Project location[/bold cyan]")
     console.print(
@@ -221,6 +237,32 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
             default=docs_default,
         )
     )
+    selected_bundles: list[str] = []
+    if initializer["bundles"]:
+        console.print("\n[bold cyan]Optional bundles[/bold cyan]")
+        selected_bundles = _ask(
+            questionary.checkbox(
+                "Bundles — transparent shortcuts for related optional features",
+                choices=[
+                    Choice(
+                        f"{bundle_id} — {bundle['description']}",
+                        value=bundle_id,
+                        checked=False,
+                    )
+                    for bundle_id, bundle in initializer["bundles"].items()
+                ],
+            )
+        )
+    bundled_capabilities = {
+        capability
+        for bundle_id in selected_bundles
+        for capability in initializer["bundles"][bundle_id]["capabilities"]
+    }
+    bundled_integrations = {
+        integration
+        for bundle_id in selected_bundles
+        for integration in initializer["bundles"][bundle_id]["integrations"]
+    }
     choices = capability_choices(source)
     required_choices = [choice for choice in choices if choice.required]
     optional_choices = [choice for choice in choices if not choice.required]
@@ -242,7 +284,15 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
                         Choice(
                             f"{choice.capability_id} — {choice.description}",
                             value=choice.capability_id,
-                            checked=True,
+                            checked=(
+                                choice.selected_by_default
+                                or choice.capability_id in bundled_capabilities
+                            ),
+                            disabled=(
+                                "included by selected bundle"
+                                if choice.capability_id in bundled_capabilities
+                                else None
+                            ),
                         )
                         for choice in typed_choices
                     ],
@@ -250,6 +300,34 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
             )
         )
     selected = tuple([choice.capability_id for choice in required_choices] + selected_optional)
+    integrations = integration_choices(source, host)
+    selected_integrations: tuple[str, ...] = ()
+    if integrations:
+        console.print("\n[bold cyan]External integrations[/bold cyan]")
+        console.print(
+            "Credentials are never stored in the project. Authentication happens after creation.",
+            style="dim",
+        )
+        selected_integrations = tuple(
+            _ask(
+                questionary.checkbox(
+                    "Optional integrations",
+                    choices=[
+                        Choice(
+                            f"{choice.integration_id} ({choice.kind}) — {choice.description}",
+                            value=choice.integration_id,
+                            checked=choice.integration_id in bundled_integrations,
+                            disabled=(
+                                "included by selected bundle"
+                                if choice.integration_id in bundled_integrations
+                                else None
+                            ),
+                        )
+                        for choice in integrations
+                    ],
+                )
+            )
+        )
     console.print("\n[bold cyan]Environment and validation[/bold cyan]")
     console.print(
         "Provisioning creates a project-local .venv; it never replaces system Python.",
@@ -342,6 +420,8 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
         host=host,
         documentation_provider=documentation_provider,
         capabilities=selected,
+        integrations=selected_integrations,
+        bundles=tuple(selected_bundles),
         python_version=python_version,
         install_dependencies=install_dependencies,
         development_tools=development_tools,
@@ -367,6 +447,8 @@ def plan_payload(plan: InstallationPlan) -> dict[str, object]:
         "run_identity": "host-session",
         "documentation_provider": plan.documentation_provider,
         "capabilities": list(plan.capabilities),
+        "bundles": list(plan.bundles),
+        "integrations": list(plan.integrations),
         "environment": {
             "python": plan.spec.python_version,
             "install_dependencies": plan.spec.install_dependencies,
@@ -442,6 +524,8 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
             next_steps.append(
                 f"# Install and authenticate {HOST_LABELS[plan.spec.host]}, then run {plan.launch_command}"
             )
+    if plan.integrations:
+        next_steps.append("# Complete integration setup in docs/integrations.md")
     console.print(
         Panel(
             "Harness created successfully.\n\n"
