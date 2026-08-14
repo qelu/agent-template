@@ -16,6 +16,9 @@ the project follows Semantic Versioning.
 - Added optional dependency and incident skills, integration and incident
   runbooks, a fail-closed staged Gitleaks hook, and transparent governance,
   operations, and team-baseline bundles.
+- Added Atlassian Rovo and GitHub remote MCP adapters, a pinned Google Workspace
+  CLI adapter and operating skill, provider bundles, environment-token handling,
+  CLI preflight/installation plans, and generated setup guidance.
 
 ### Changed
 

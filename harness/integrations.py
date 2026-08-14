@@ -24,10 +24,14 @@ INTEGRATION_FIELDS = {
     "data_classes",
     "write_capable",
     "endpoint",
+    "token_env",
+    "command",
+    "install_command",
+    "setup_commands",
 }
 INTEGRATION_STATUSES = {"active", "experimental", "disabled"}
 INTEGRATION_KINDS = {"remote-mcp", "official-cli", "plugin"}
-INTEGRATION_AUTH = {"none", "oauth", "provider-cli"}
+INTEGRATION_AUTH = {"none", "oauth", "provider-cli", "token-env"}
 INTEGRATION_APPROVALS = {"prompt", "writes"}
 INTEGRATION_HOSTS = {"codex", "claude-code", "antigravity"}
 
@@ -98,14 +102,49 @@ def load_integrations(root: Path) -> list[dict[str, Any]]:
                 f"Optional integration {integration_id} cannot be required at host startup"
             )
         endpoint = integration["endpoint"]
+        token_env = integration["token_env"]
+        command = integration["command"]
+        install_command = integration["install_command"]
+        setup_commands = integration["setup_commands"]
+        if token_env is not None and (
+            not isinstance(token_env, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]*", token_env)
+        ):
+            raise IntegrationError(f"Integration {integration_id} has invalid token_env")
+        if integration["auth"] == "token-env" and token_env is None:
+            raise IntegrationError(f"Token integration {integration_id} requires token_env")
+        if integration["auth"] != "token-env" and token_env is not None:
+            raise IntegrationError(
+                f"Integration {integration_id} may not declare token_env for {integration['auth']}"
+            )
+        if not isinstance(setup_commands, list) or not all(
+            isinstance(item, str) and item.strip() for item in setup_commands
+        ):
+            raise IntegrationError(f"Integration {integration_id} has invalid setup_commands")
         if integration["kind"] == "remote-mcp":
             if not isinstance(endpoint, str) or not endpoint.startswith("https://"):
                 raise IntegrationError(
                     f"Remote MCP integration {integration_id} requires an HTTPS endpoint"
                 )
-        elif endpoint is not None:
+            if command is not None or install_command is not None:
+                raise IntegrationError(
+                    f"Remote MCP integration {integration_id} may not declare CLI installation"
+                )
+        elif integration["kind"] == "official-cli":
+            if endpoint is not None or token_env is not None:
+                raise IntegrationError(
+                    f"CLI integration {integration_id} may not declare endpoint or token_env"
+                )
+            if not isinstance(command, str) or not command.strip():
+                raise IntegrationError(f"CLI integration {integration_id} requires command")
+            if (
+                not isinstance(install_command, list)
+                or not install_command
+                or not all(isinstance(item, str) and item.strip() for item in install_command)
+            ):
+                raise IntegrationError(f"CLI integration {integration_id} requires install_command")
+        elif endpoint is not None or command is not None or install_command is not None:
             raise IntegrationError(
-                f"Non-MCP integration {integration_id} must set endpoint to null"
+                f"Plugin integration {integration_id} has invalid transport fields"
             )
     return integrations
 

@@ -19,7 +19,8 @@ The following documented surfaces are public interfaces:
 - `config/capabilities.yaml` version 1.0 and its `id`, `type`, `status`, `path`,
   `description`, and `when` fields;
 - `config/integrations.yaml` version 1.0 and its integration identity, trust,
-  authentication, host, and approval fields;
+  authentication, host, approval, transport, credential-environment, and CLI
+  installation fields;
 - `config/initializer.yaml` version 1.0 and the required/default capability,
   bundle, and environment selections it controls;
 - installation receipt schema 2.0 in

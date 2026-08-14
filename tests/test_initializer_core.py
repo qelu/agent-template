@@ -15,6 +15,7 @@ from harness.initializer import (
     capability_choices,
     destination_error,
     execute_plan,
+    integration_choices,
     provision_and_validate,
     resolve_plan,
     select_capabilities,
@@ -201,6 +202,10 @@ class InitializerCoreTests(unittest.TestCase):
             "data_classes": ["records"],
             "write_capable": True,
             "endpoint": "https://example.com/mcp",
+            "token_env": None,
+            "command": None,
+            "install_command": None,
+            "setup_commands": [],
         }
         with (
             tempfile.TemporaryDirectory() as temporary,
@@ -235,6 +240,131 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertIn("example-cloud", antigravity_config["mcpServers"])
             self.assertEqual(receipt["integrations"][0]["authentication"], "pending")
             self.assertTrue((destinations["codex"] / "docs/integrations.md").is_file())
+
+    def test_provider_integrations_are_filtered_by_host(self) -> None:
+        codex = {choice.integration_id for choice in integration_choices(self.root, "codex")}
+        antigravity = {
+            choice.integration_id for choice in integration_choices(self.root, "antigravity")
+        }
+
+        self.assertEqual(codex, {"atlassian-rovo", "github", "google-workspace"})
+        self.assertEqual(antigravity, {"atlassian-rovo", "google-workspace"})
+
+    def test_github_mcp_uses_environment_token_without_storing_a_secret(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destinations: dict[str, Path] = {}
+            for host in ("codex", "claude-code"):
+                destination = root / host
+                plan = resolve_plan(
+                    self.root,
+                    self.spec(
+                        destination,
+                        host=host,
+                        documentation_provider="none",
+                        capabilities=(),
+                        integrations=("github",),
+                    ),
+                )
+                execute_plan(self.root, plan)
+                destinations[host] = destination
+
+            codex = (destinations["codex"] / ".codex/config.toml").read_text()
+            claude = json.loads((destinations["claude-code"] / ".mcp.json").read_text())
+            docs = (destinations["codex"] / "docs/integrations.md").read_text()
+            validation = subprocess.run(
+                [sys.executable, "scripts/validate_harness.py"],
+                cwd=destinations["codex"],
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertIn('bearer_token_env_var = "GITHUB_PERSONAL_ACCESS_TOKEN"', codex)
+        self.assertEqual(
+            claude["mcpServers"]["github"]["headers"]["Authorization"],
+            "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN:-}",
+        )
+        self.assertIn("Credential environment: GITHUB_PERSONAL_ACCESS_TOKEN", docs)
+        self.assertNotIn("ghp_", codex + json.dumps(claude) + docs)
+        self.assertEqual(validation.returncode, 0, validation.stderr)
+
+    def test_atlassian_bundle_uses_current_authv2_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "agent"
+            plan = resolve_plan(
+                self.root,
+                self.spec(
+                    destination,
+                    host="codex",
+                    documentation_provider="none",
+                    capabilities=(),
+                    bundles=("atlassian-work",),
+                ),
+            )
+            execute_plan(self.root, plan)
+            config = (destination / ".codex/config.toml").read_text()
+            receipt = yaml.safe_load((destination / ".agent-harness/installation.yaml").read_text())
+
+        self.assertIn("https://mcp.atlassian.com/v1/mcp/authv2", config)
+        self.assertIn('default_tools_approval_mode = "writes"', config)
+        self.assertIn("required = false", config)
+        self.assertEqual(receipt["integrations"][0]["authentication"], "pending")
+
+    def test_google_workspace_plans_pinned_cli_install_when_missing(self) -> None:
+        def find(command: str) -> str | None:
+            return None if command in {"gws", "codex"} else f"/tools/{command}"
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("harness.initializer.shutil.which", side_effect=find),
+        ):
+            plan = resolve_plan(
+                self.root,
+                self.spec(
+                    Path(temporary) / "agent",
+                    host="codex",
+                    capabilities=(),
+                    bundles=("google-workspace",),
+                ),
+            )
+
+        self.assertIn(
+            (
+                "npm",
+                "install",
+                "--global",
+                "@googleworkspace/cli@0.22.5",
+            ),
+            plan.external_commands,
+        )
+        self.assertIn("google-workspace-cli", plan.capabilities)
+        self.assertEqual(plan.integrations, ("google-workspace",))
+
+    def test_google_workspace_bundle_packages_cli_skill_and_setup(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "harness.initializer.shutil.which", side_effect=lambda command: f"/tools/{command}"
+            ),
+        ):
+            destination = Path(temporary) / "agent"
+            plan = resolve_plan(
+                self.root,
+                self.spec(
+                    destination,
+                    host="codex",
+                    capabilities=(),
+                    bundles=("google-workspace",),
+                ),
+            )
+            execute_plan(self.root, plan)
+            skill = destination / ".agents/skills/google-workspace-cli"
+            docs = (destination / "docs/integrations.md").read_text()
+
+            self.assertTrue((skill / "SKILL.md").is_file())
+            self.assertTrue((skill / "references/setup.md").is_file())
+            self.assertIn("gws auth setup", docs)
+            self.assertIn("gws auth login -s drive,gmail,calendar", docs)
 
     def test_missing_host_install_is_explicit_and_uses_official_package(self) -> None:
         def find(command: str) -> str | None:

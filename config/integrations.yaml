@@ -1,2 +1,84 @@
 version: "1.0"
-integrations: []
+integrations:
+  - id: atlassian-rovo
+    status: active
+    kind: remote-mcp
+    provider: Atlassian
+    description: Access Jira, Confluence, Jira Service Management, and Bitbucket through Atlassian Rovo MCP.
+    official_source: https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/
+    auth: oauth
+    hosts:
+      - codex
+      - claude-code
+      - antigravity
+    default_approval: writes
+    required: false
+    data_classes:
+      - jira-work-items
+      - confluence-pages
+      - service-management-records
+      - bitbucket-repositories
+    write_capable: true
+    endpoint: https://mcp.atlassian.com/v1/mcp/authv2
+    token_env: null
+    command: null
+    install_command: null
+    setup_commands: []
+
+  - id: github
+    status: active
+    kind: remote-mcp
+    provider: GitHub
+    description: Access repositories, issues, pull requests, actions, and security results through GitHub's official MCP server.
+    official_source: https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md
+    auth: token-env
+    hosts:
+      - codex
+      - claude-code
+    default_approval: writes
+    required: false
+    data_classes:
+      - repositories
+      - issues
+      - pull-requests
+      - actions
+      - security-findings
+    write_capable: true
+    endpoint: https://api.githubcopilot.com/mcp/
+    token_env: GITHUB_PERSONAL_ACCESS_TOKEN
+    command: null
+    install_command: null
+    setup_commands: []
+
+  - id: google-workspace
+    status: active
+    kind: official-cli
+    provider: Google Workspace open source
+    description: Install the Google-maintained gws CLI for structured Gmail, Drive, Calendar, Docs, Sheets, and related API operations.
+    official_source: https://github.com/googleworkspace/cli
+    auth: provider-cli
+    hosts:
+      - codex
+      - claude-code
+      - antigravity
+    default_approval: writes
+    required: false
+    data_classes:
+      - email
+      - files
+      - calendars
+      - documents
+      - spreadsheets
+      - chat
+    write_capable: true
+    endpoint: null
+    token_env: null
+    command: gws
+    install_command:
+      - npm
+      - install
+      - --global
+      - "@googleworkspace/cli@0.22.5"
+    setup_commands:
+      - gws auth setup
+      - gws auth login -s drive,gmail,calendar
