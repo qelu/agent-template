@@ -246,7 +246,9 @@ Every generated harness includes these required skills:
   tagged template releases.
 
 Optional packaged capabilities currently include `evidence-gathering`,
-`documentation-maintenance`, `post-work-review`, and `devoteam-branding`. The
+`documentation-maintenance`, `post-work-review`, `dependency-change-review`,
+`incident-triage`, the `incident-response` and `integration-lifecycle` runbooks,
+the `pre-commit-secret-scan` hook, and `devoteam-branding`. The
 post-work review examines ADRs, debt, skills, hooks, policies, runbooks,
 configuration, tests, integrations, and user documentation after material work,
 then separates required maintenance from proposed new scope. The branding skill applies,
@@ -267,6 +269,11 @@ Generated projects contain the selected manifest and `docs/integrations.md`; rem
 MCP entries are merged into native host configuration. Credentials are never copied
 into the project, authentication remains pending until completed through the host or
 provider, and optional servers do not become required for host startup.
+
+The `governance`, `operations`, and `team-baseline` bundles provide transparent
+shortcuts over the provider-neutral catalog. The staged-secret hook is optional,
+uses the official Gitleaks command, requires Gitleaks to be present or explicitly
+installed, and configures only the generated repository's local Git hooks path.
 
 From a generated harness, project scope can be updated consistently on every host:
 

@@ -76,3 +76,38 @@ capabilities:
     path: skills/post-work-review
     description: Review durable project maintenance after major work or first use of a service.
     when: Use after material architecture, configuration, security, workflow, integration, or operational changes.
+
+  - id: dependency-change-review
+    type: skill
+    status: active
+    path: skills/dependency-change-review
+    description: Review dependency changes for need, provenance, compatibility, risk, and rollback.
+    when: Use when a dependency, lockfile, action, image, or toolchain changes materially.
+
+  - id: incident-triage
+    type: skill
+    status: active
+    path: skills/incident-triage
+    description: Triage incidents through evidence preservation, safe stabilization, and handoff.
+    when: Use for outages, degradation, security or data events, failed deployments, or unexplained production symptoms.
+
+  - id: integration-lifecycle
+    type: runbook
+    status: active
+    path: knowledge/runbooks/integration-lifecycle.md
+    description: Connect, verify, troubleshoot, and revoke optional external integrations safely.
+    when: Use when onboarding, testing, rotating, diagnosing, or removing an external integration.
+
+  - id: incident-response
+    type: runbook
+    status: active
+    path: knowledge/runbooks/incident-response.md
+    description: Coordinate incident ownership, containment, recovery, communication, and follow-up.
+    when: Use during operational incident response or readiness exercises.
+
+  - id: pre-commit-secret-scan
+    type: hook
+    status: active
+    path: .githooks/pre-commit
+    description: Scan staged changes with Gitleaks before Git creates a commit.
+    when: Use when local commits should fail closed on detected hardcoded secrets.

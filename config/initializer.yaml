@@ -11,7 +11,35 @@ default_capabilities:
   - evidence-gathering
   - documentation-maintenance
   - devoteam-branding
-bundles: {}
+bundles:
+  governance:
+    description: Evidence, dependency, documentation, and post-work governance reviews.
+    capabilities:
+      - evidence-gathering
+      - dependency-change-review
+      - documentation-maintenance
+      - post-work-review
+    integrations: []
+  operations:
+    description: Incident procedures, integration lifecycle guidance, and staged secret scanning.
+    capabilities:
+      - incident-triage
+      - incident-response
+      - integration-lifecycle
+      - pre-commit-secret-scan
+    integrations: []
+  team-baseline:
+    description: All provider-neutral optional governance and operations additions.
+    capabilities:
+      - evidence-gathering
+      - dependency-change-review
+      - documentation-maintenance
+      - post-work-review
+      - incident-triage
+      - incident-response
+      - integration-lifecycle
+      - pre-commit-secret-scan
+    integrations: []
 defaults:
   host: claude-code
   python: "3.13"

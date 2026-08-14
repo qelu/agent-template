@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency Change Review"
+  short_description: "Review dependency changes and supply-chain risk."
+  default_prompt: "Use $dependency-change-review to assess this dependency change and its validation and rollback needs."

@@ -13,6 +13,9 @@ the project follows Semantic Versioning.
 - Added an opt-in post-work review skill that routes material interaction lessons
   to existing ADR, debt, skill, hook, runbook, configuration, test, integration,
   or user-documentation owners without automatically expanding scope.
+- Added optional dependency and incident skills, integration and incident
+  runbooks, a fail-closed staged Gitleaks hook, and transparent governance,
+  operations, and team-baseline bundles.
 
 ### Changed
 

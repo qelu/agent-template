@@ -39,6 +39,11 @@ ID, applies the portable policy, allows scoped reads, asks for scoped writes,
 denies deletions and denied paths, and writes redacted metadata under
 `.agent-harness/audit/`.
 
+Optional skills, runbooks, validators, and hooks are listed in
+`config/capabilities.yaml`. If `pre-commit-secret-scan` is selected, this
+repository uses `.githooks/pre-commit` to scan staged changes with Gitleaks before
+Git creates a commit.
+
 `config/policies.yaml` uses JSON-compatible YAML so the dependency-free hook
 bridges read that exact file directly. The strict runtime parser rejects malformed
 or unknown fields and fails closed. The default decisions are:
