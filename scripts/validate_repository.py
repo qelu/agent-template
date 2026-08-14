@@ -42,6 +42,8 @@ REQUIRED = (
     "config/persona.yaml",
     "config/policies.yaml",
     "config/schemas/installation.schema.json",
+    "docs/compatibility.md",
+    "docs/releasing.md",
     "harness/configuration.py",
     "harness/initializer.py",
     "harness/policy.py",

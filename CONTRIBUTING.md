@@ -77,7 +77,10 @@ justified by the reusable value.
 The project follows Semantic Versioning. Preserve documented 1.x interfaces within
 the major release line; record breaking changes explicitly and reserve them for a
 new major version. User-visible changes should add an entry under `Unreleased` in
-`CHANGELOG.md`.
+`CHANGELOG.md`. Review `docs/compatibility.md` before changing a documented CLI,
+configuration format, generated path, or hook contract. Include migration guidance
+whenever operator action is required. Maintainers must complete
+`docs/releasing.md` before publishing a release.
 
 ## Security reports
 

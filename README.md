@@ -324,6 +324,14 @@ tests/       host conformance and behavioral tests
 - Improve semantic plan-approval enforcement when hosts expose stable approval events.
 - Broaden release-upgrade coverage while preserving locally changed skills.
 
+## Compatibility and releases
+
+The [compatibility policy](docs/compatibility.md) inventories the documented 1.x
+interfaces, host and hook contracts, deprecation rules, and migration guarantees.
+The `harness` package remains an internal implementation detail rather than a
+supported Python import API. Maintainers use the [release process](docs/releasing.md)
+to collect compatibility, validation, security, and publication evidence.
+
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).
