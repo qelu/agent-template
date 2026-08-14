@@ -69,3 +69,10 @@ capabilities:
     path: skills/devoteam-branding
     description: Apply and validate Devoteam branding across business artifacts.
     when: Use when creating, rebranding, or auditing a Devoteam document, presentation, spreadsheet, PDF, CV, report, proposal, or visual asset.
+
+  - id: post-work-review
+    type: skill
+    status: active
+    path: skills/post-work-review
+    description: Review durable project maintenance after major work or first use of a service.
+    when: Use after material architecture, configuration, security, workflow, integration, or operational changes.

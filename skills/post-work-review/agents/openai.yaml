@@ -1,0 +1,4 @@
+interface:
+  display_name: "Post-work Review"
+  short_description: "Review durable project maintenance after major work."
+  default_prompt: "Use $post-work-review to assess what durable project knowledge, guardrails, and integrations should change after this work."

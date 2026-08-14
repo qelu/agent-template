@@ -337,6 +337,19 @@ class InitializerCoreTests(unittest.TestCase):
                 {item["id"] for item in registry["capabilities"]},
             )
 
+    def test_optional_post_work_review_is_packaged_with_its_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "agent"
+            plan = resolve_plan(
+                self.root,
+                self.spec(destination, host="codex", capabilities=("post-work-review",)),
+            )
+            execute_plan(self.root, plan)
+
+            skill = destination / ".agents" / "skills" / "post-work-review"
+            self.assertTrue((skill / "SKILL.md").is_file())
+            self.assertTrue((skill / "references" / "review-matrix.md").is_file())
+
     def test_capability_removal_cannot_escape_or_delete_project_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary)
