@@ -185,6 +185,13 @@ of unfamiliar services. It checks whether durable decisions, debt, procedures,
 guardrails, configuration, tests, or integration setup need maintenance, and it
 does not install tools or expand authority merely because it found an opportunity.
 
+The first generic catalog also provides dependency review and incident-triage
+skills, incident-response and external-integration-lifecycle runbooks, and an
+optional staged-secret Git hook. Select `governance`, `operations`, or
+`team-baseline` to use reviewed shortcuts whose contents remain visible in the
+plan and receipt. Selecting `pre-commit-secret-scan` requires Gitleaks; on macOS
+the initializer can add an official Homebrew installation to the approval plan.
+
 | Host | Skills directory |
 | --- | --- |
 | Codex | `.agents/skills/` |
@@ -223,6 +230,7 @@ required.
 | Python packages | Installed into the generated `.venv` only when `--install` is selected. |
 | Development tools | Ruff, pytest, mypy, and pre-commit from the dev extra when provisioning with development tools enabled. |
 | Gitleaks | Run only when selected. The wizard detects it before offering the scan and can plan an official Homebrew install on macOS. |
+| Staged secret hook | Optional; enables the generated repository's local `.githooks/pre-commit` and requires Gitleaks. |
 | Codex CLI | Optional explicit installation using the official npm package. |
 | Claude Code | Optional explicit installation using the official npm package. |
 | Antigravity CLI | Detected as `agy`; use Google's official installer when absent. The initializer does not pipe a remote script into a shell. |

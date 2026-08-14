@@ -361,7 +361,8 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
     host_command = HOST_COMMANDS.get(host)
     if host_command:
         tools_to_check.append(host_command[0])
-    if normalized.security_tools:
+    secret_scan_hook = "pre-commit-secret-scan" in selected
+    if normalized.security_tools or secret_scan_hook:
         tools_to_check.append("gitleaks")
     statuses = tuple(
         ToolStatus(command, shutil.which(command)) for command in dict.fromkeys(tools_to_check)
@@ -370,13 +371,19 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
     external_commands: list[tuple[str, ...]] = []
     if normalized.install_dependencies and not status_by_command["uv"].available:
         raise InitializerError("uv is required for --install; install uv and rerun")
-    if normalized.security_tools and not status_by_command["gitleaks"].available:
+    if (normalized.security_tools or secret_scan_hook) and not status_by_command[
+        "gitleaks"
+    ].available:
         if platform.system() == "Darwin" and shutil.which("brew"):
             external_commands.append(("brew", "install", "gitleaks"))
         else:
+            suffix = (
+                "and select it again" if secret_scan_hook else "and rerun with --security-tools"
+            )
             raise InitializerError(
                 "Gitleaks is not installed. Install it from https://github.com/gitleaks/gitleaks "
-                "and rerun with --security-tools."
+                + suffix
+                + "."
             )
     if (
         normalized.install_host_tool
@@ -416,7 +423,9 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
                 f"The {host_command[0]} installation completed but the command is not on PATH"
             )
 
-    if plan.spec.security_tools and not shutil.which("gitleaks"):
+    if (
+        plan.spec.security_tools or "pre-commit-secret-scan" in plan.capabilities
+    ) and not shutil.which("gitleaks"):
         raise InitializerError("Gitleaks is no longer available on PATH")
     if error := destination_error(source, destination):
         raise InitializerError(error)
@@ -454,6 +463,8 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
         if unresolved:
             raise InitializerError("Unresolved placeholders: " + ", ".join(unresolved))
         _run(["git", "init", "--quiet"], cwd=staging)
+        if "pre-commit-secret-scan" in plan.capabilities:
+            _run(["git", "config", "core.hooksPath", ".githooks"], cwd=staging)
         os.replace(staging, destination)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)

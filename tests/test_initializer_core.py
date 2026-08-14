@@ -161,6 +161,30 @@ class InitializerCoreTests(unittest.TestCase):
             {"documentation-maintenance", "evidence-gathering", "devoteam-branding"}
             <= set(plan.capabilities)
         )
+        self.assertNotIn("incident-triage", plan.capabilities)
+        self.assertNotIn("pre-commit-secret-scan", plan.capabilities)
+
+    def test_bundle_expands_to_visible_capabilities(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            plan = resolve_plan(
+                self.root,
+                self.spec(
+                    Path(temporary) / "agent",
+                    capabilities=(),
+                    bundles=("governance",),
+                ),
+            )
+
+        self.assertEqual(plan.bundles, ("governance",))
+        self.assertTrue(
+            {
+                "evidence-gathering",
+                "dependency-change-review",
+                "documentation-maintenance",
+                "post-work-review",
+            }
+            <= set(plan.capabilities)
+        )
 
     def test_remote_integration_is_merged_and_recorded_for_each_host(self) -> None:
         integration = {
@@ -269,6 +293,7 @@ class InitializerCoreTests(unittest.TestCase):
                 (destination / ".claude" / "skills" / "import-template-skills").is_dir()
             )
             self.assertFalse((destination / ".claude" / "skills" / "evidence-gathering").exists())
+            self.assertFalse((destination / ".githooks").exists())
             self.assertTrue(
                 (destination / ".claude" / "skills" / "anthropic-documentation").is_dir()
             )
@@ -349,6 +374,59 @@ class InitializerCoreTests(unittest.TestCase):
             skill = destination / ".agents" / "skills" / "post-work-review"
             self.assertTrue((skill / "SKILL.md").is_file())
             self.assertTrue((skill / "references" / "review-matrix.md").is_file())
+
+    def test_operations_bundle_packages_runbooks_and_enables_secret_hook(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "harness.initializer.shutil.which", side_effect=lambda command: f"/tools/{command}"
+            ),
+        ):
+            destination = Path(temporary) / "agent"
+            plan = resolve_plan(
+                self.root,
+                self.spec(
+                    destination,
+                    host="codex",
+                    capabilities=(),
+                    bundles=("operations",),
+                ),
+            )
+            execute_plan(self.root, plan)
+
+            hook = destination / ".githooks" / "pre-commit"
+            hooks_path = subprocess.run(
+                ["git", "config", "--get", "core.hooksPath"],
+                cwd=destination,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            self.assertTrue(hook.is_file())
+            self.assertTrue(hook.stat().st_mode & 0o100)
+            self.assertEqual(hooks_path, ".githooks")
+            self.assertTrue((destination / "knowledge/runbooks/incident-response.md").is_file())
+            self.assertTrue((destination / "knowledge/runbooks/integration-lifecycle.md").is_file())
+
+    def test_secret_hook_plans_gitleaks_install_when_missing_on_macos(self) -> None:
+        def find(command: str) -> str | None:
+            return None if command in {"gitleaks", "codex"} else f"/tools/{command}"
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("harness.initializer.platform.system", return_value="Darwin"),
+            patch("harness.initializer.shutil.which", side_effect=find),
+        ):
+            plan = resolve_plan(
+                self.root,
+                self.spec(
+                    Path(temporary) / "agent",
+                    host="codex",
+                    capabilities=("pre-commit-secret-scan",),
+                ),
+            )
+
+        self.assertIn(("brew", "install", "gitleaks"), plan.external_commands)
 
     def test_capability_removal_cannot_escape_or_delete_project_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
