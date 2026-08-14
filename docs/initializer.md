@@ -180,6 +180,11 @@ proposals, and visual assets. It resolves current official templates and logos
 through the authenticated Devoteam Branding Zone at task time; the public
 template repository does not embed private Drive links or file IDs.
 
+`post-work-review` is an opt-in completion review for material work and first use
+of unfamiliar services. It checks whether durable decisions, debt, procedures,
+guardrails, configuration, tests, or integration setup need maintenance, and it
+does not install tools or expand authority merely because it found an opportunity.
+
 | Host | Skills directory |
 | --- | --- |
 | Codex | `.agents/skills/` |

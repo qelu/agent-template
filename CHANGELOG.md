@@ -10,6 +10,9 @@ the project follows Semantic Versioning.
 - Added separate optional integration and bundle catalogs, initializer flags and
   wizard selection, native remote-MCP configuration, setup guidance, receipts,
   validation, and trust-boundary documentation.
+- Added an opt-in post-work review skill that routes material interaction lessons
+  to existing ADR, debt, skill, hook, runbook, configuration, test, integration,
+  or user-documentation owners without automatically expanding scope.
 
 ### Changed
 

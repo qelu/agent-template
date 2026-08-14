@@ -246,7 +246,10 @@ Every generated harness includes these required skills:
   tagged template releases.
 
 Optional packaged capabilities currently include `evidence-gathering`,
-`documentation-maintenance`, and `devoteam-branding`. The branding skill applies,
+`documentation-maintenance`, `post-work-review`, and `devoteam-branding`. The
+post-work review examines ADRs, debt, skills, hooks, policies, runbooks,
+configuration, tests, integrations, and user documentation after material work,
+then separates required maintenance from proposed new scope. The branding skill applies,
 rebrands, or audits business artifacts using current authenticated Devoteam sources
 when available; this public repository does not embed private assets or links. The
 wizard preselects the optional defaults in `config/initializer.yaml` so users can
