@@ -78,6 +78,8 @@ Register external services in `config/integrations.yaml`, independently from
 model-facing capabilities. Use an official remote MCP, provider CLI, or host plugin;
 link its authoritative setup source and declare authentication, supported hosts,
 data classes, write capability, endpoint, and default approval posture. Integration
+entries also declare credential environment variables or CLI installation and setup
+commands when applicable; those values must remain non-secret and reviewable. Integration
 changes must include native-host generation tests plus setup, smoke-test, and revoke
 guidance. Never commit credentials or make an optional integration required for host
 startup. Add it to a bundle only when that shortcut remains understandable in the

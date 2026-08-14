@@ -364,6 +364,12 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
     secret_scan_hook = "pre-commit-secret-scan" in selected
     if normalized.security_tools or secret_scan_hook:
         tools_to_check.append("gitleaks")
+    selected_cli_integrations = [
+        active_integrations[integration_id]
+        for integration_id in selected_integrations
+        if active_integrations[integration_id]["kind"] == "official-cli"
+    ]
+    tools_to_check.extend(str(item["command"]) for item in selected_cli_integrations)
     statuses = tuple(
         ToolStatus(command, shutil.which(command)) for command in dict.fromkeys(tools_to_check)
     )
@@ -385,19 +391,31 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
                 + suffix
                 + "."
             )
+    for integration in selected_cli_integrations:
+        cli_command = str(integration["command"])
+        if status_by_command[cli_command].available:
+            continue
+        install_command = tuple(str(item) for item in integration["install_command"])
+        if not shutil.which(install_command[0]):
+            raise InitializerError(
+                f"{install_command[0]} is required to install integration {integration['id']}"
+            )
+        external_commands.append(install_command)
     if (
         normalized.install_host_tool
         and host_command
         and not status_by_command[host_command[0]].available
     ):
-        command = HOST_INSTALL_COMMANDS.get(host)
-        if command is None:
+        host_install_command = HOST_INSTALL_COMMANDS.get(host)
+        if host_install_command is None:
             raise InitializerError(
                 "Antigravity CLI uses its official installer; install `agy` from antigravity.google before continuing"
             )
-        if not shutil.which(command[0]):
-            raise InitializerError(f"{command[0]} is required to install the selected host tool")
-        external_commands.append(command)
+        if not shutil.which(host_install_command[0]):
+            raise InitializerError(
+                f"{host_install_command[0]} is required to install the selected host tool"
+            )
+        external_commands.append(host_install_command)
     return InstallationPlan(
         normalized,
         provider,
@@ -427,6 +445,13 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
         plan.spec.security_tools or "pre-commit-secret-scan" in plan.capabilities
     ) and not shutil.which("gitleaks"):
         raise InitializerError("Gitleaks is no longer available on PATH")
+    integrations = {str(item["id"]): item for item in _load_source_integrations(source)}
+    for integration_id in plan.integrations:
+        integration = integrations[integration_id]
+        if integration["kind"] == "official-cli" and not shutil.which(str(integration["command"])):
+            raise InitializerError(
+                f"Integration command {integration['command']} is not available after installation"
+            )
     if error := destination_error(source, destination):
         raise InitializerError(error)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -680,6 +705,7 @@ def _add_remote_mcp(
     url: str,
     *,
     approval: str | None = None,
+    token_env: str | None = None,
 ) -> Path:
     if host == "codex":
         path = destination / ".codex" / "config.toml"
@@ -688,13 +714,18 @@ def _add_remote_mcp(
             if approval:
                 stream.write("required = false\n")
                 stream.write(f'default_tools_approval_mode = "{approval}"\n')
+            if token_env:
+                stream.write(f'bearer_token_env_var = "{token_env}"\n')
         return path
     if host == "claude-code":
         path = destination / ".mcp.json"
         payload = (
             json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"mcpServers": {}}
         )
-        payload.setdefault("mcpServers", {})[server_id] = {"type": "http", "url": url}
+        server: dict[str, object] = {"type": "http", "url": url}
+        if token_env:
+            server["headers"] = {"Authorization": f"Bearer ${{{token_env}:-}}"}
+        payload.setdefault("mcpServers", {})[server_id] = server
     else:
         path = destination / ".agents" / "mcp_config.json"
         payload = (
@@ -727,6 +758,9 @@ def write_integration_configuration(
                 integration_id,
                 str(integration["endpoint"]),
                 approval=str(integration["default_approval"]),
+                token_env=(
+                    str(integration["token_env"]) if integration["token_env"] is not None else None
+                ),
             )
         lines.extend(
             (
@@ -744,10 +778,25 @@ def write_integration_configuration(
                 ),
                 f"- Default approval: {integration['default_approval']}",
                 f"- Official source: {integration['official_source']}",
+                *(
+                    (f"- Credential environment: {integration['token_env']}",)
+                    if integration["token_env"]
+                    else ()
+                ),
                 "",
                 "Review the provider's authorization scopes, authenticate, test a read-only action,",
                 "and confirm write prompts before enabling production use.",
                 "",
+                *(
+                    (
+                        "Suggested setup commands (review before running):",
+                        "",
+                        *(f"- `{command}`" for command in integration["setup_commands"]),
+                        "",
+                    )
+                    if integration["setup_commands"]
+                    else ()
+                ),
             )
         )
     path = destination / "docs" / "integrations.md"

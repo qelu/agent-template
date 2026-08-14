@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sys
 import tomllib
 from pathlib import Path
@@ -46,6 +47,10 @@ INTEGRATION_FIELDS = {
     "data_classes",
     "write_capable",
     "endpoint",
+    "token_env",
+    "command",
+    "install_command",
+    "setup_commands",
 }
 
 
@@ -220,6 +225,12 @@ def main() -> int:
             if host not in integration["hosts"]:
                 errors.append(f"Integration {integration_id} does not support host {host}")
             if integration["kind"] != "remote-mcp":
+                if integration["kind"] == "official-cli" and not shutil.which(
+                    str(integration["command"])
+                ):
+                    errors.append(
+                        f"Selected integration command is unavailable: {integration['command']}"
+                    )
                 continue
             if host == "codex":
                 config = tomllib.loads((ROOT / ".codex/config.toml").read_text())

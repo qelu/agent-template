@@ -161,7 +161,7 @@ uv run python scripts/initialize_agent.py \
   --tone "clear and evidence-led" \
   --host claude-code \
   --capability evidence-gathering \
-  --integration jira-cloud \
+  --integration atlassian-rovo \
   --install
 ```
 
@@ -269,6 +269,18 @@ Generated projects contain the selected manifest and `docs/integrations.md`; rem
 MCP entries are merged into native host configuration. Credentials are never copied
 into the project, authentication remains pending until completed through the host or
 provider, and optional servers do not become required for host startup.
+
+The initial provider catalog contains:
+
+- Atlassian Rovo MCP for Jira, Confluence, Jira Service Management, and Bitbucket,
+  using Atlassian's current OAuth 2.1 endpoint on every concrete host;
+- GitHub's official remote MCP on Codex and Claude Code, using only the
+  `GITHUB_PERSONAL_ACCESS_TOKEN` environment variable for a narrowly scoped token; and
+- the Google-maintained `gws` CLI with a packaged operating skill and an installer
+  pinned to 0.22.5 when the command is missing.
+  The upstream project is pre-1.0, states that it is not an officially supported
+  Google product, and removed its MCP command in 0.8.0, so the template does not
+  invent a Google Workspace MCP server.
 
 The `governance`, `operations`, and `team-baseline` bundles provide transparent
 shortcuts over the provider-neutral catalog. The staged-secret hook is optional,

@@ -32,6 +32,11 @@ Optional external services selected during initialization are listed in
 test a read-only operation, and confirm write prompts. The project contains no
 integration credentials.
 
+An integration may use a remote MCP server or a provider-maintained CLI. CLI
+installation commands are recorded in the approved plan. Environment-variable names
+in native MCP configuration are references only; set credential values in the shell
+or user secret manager before launching the host, never in tracked files.
+
 Required and selected optional skills live in the host's native project directory.
 Native permission and hook configuration supplies project-level safety controls.
 The host-specific bridge uses the host session/conversation identifier as the run

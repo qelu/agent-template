@@ -31,6 +31,10 @@ class IntegrationCatalogTests(unittest.TestCase):
             "data_classes": ["issues", "projects"],
             "write_capable": True,
             "endpoint": "https://mcp.atlassian.com/v1/mcp/authv2",
+            "token_env": None,
+            "command": None,
+            "install_command": None,
+            "setup_commands": [],
         }
         result.update(overrides)
         return result
@@ -66,7 +70,7 @@ class IntegrationCatalogTests(unittest.TestCase):
                 root,
                 [self.integration(kind="official-cli", auth="provider-cli", endpoint="nope")],
             )
-            with self.assertRaisesRegex(IntegrationError, "must set endpoint to null"):
+            with self.assertRaisesRegex(IntegrationError, "may not declare endpoint"):
                 load_integrations(root)
 
     def test_optional_integration_cannot_be_required_at_startup(self) -> None:
@@ -81,6 +85,38 @@ class IntegrationCatalogTests(unittest.TestCase):
             root = Path(temporary)
             self.write_catalog(root, [self.integration(official_source="http://example.com")])
             with self.assertRaisesRegex(IntegrationError, "official_source must use HTTPS"):
+                load_integrations(root)
+
+    def test_official_cli_requires_command_and_install_vector(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_catalog(
+                root,
+                [
+                    self.integration(
+                        kind="official-cli",
+                        auth="provider-cli",
+                        endpoint=None,
+                        command="gws",
+                        install_command=[
+                            "npm",
+                            "install",
+                            "--global",
+                            "@googleworkspace/cli@0.22.5",
+                        ],
+                        setup_commands=["gws auth login -s drive"],
+                    )
+                ],
+            )
+            integration = load_integrations(root)[0]
+
+        self.assertEqual(integration["command"], "gws")
+
+    def test_token_auth_requires_environment_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_catalog(root, [self.integration(auth="token-env")])
+            with self.assertRaisesRegex(IntegrationError, "requires token_env"):
                 load_integrations(root)
 
 

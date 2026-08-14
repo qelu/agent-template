@@ -222,6 +222,20 @@ testing, scope review, and write-confirmation checks. The installation receipt
 records each selection with authentication initially `pending` unless none is
 required.
 
+Current provider adapters are deliberately different where provider contracts differ:
+
+| Selection | Adapter | Authentication | Hosts |
+| --- | --- | --- | --- |
+| `atlassian-rovo` | Atlassian remote MCP at the current `authv2` endpoint | Host-managed OAuth 2.1 | Codex, Claude Code, Antigravity |
+| `github` | GitHub official remote MCP | Fine-grained token from `GITHUB_PERSONAL_ACCESS_TOKEN`; never written to project config | Codex, Claude Code |
+| `google-workspace` | `gws` CLI plus optional operating skill; missing-command install is pinned to 0.22.5 | Provider CLI OAuth | Codex, Claude Code, Antigravity |
+
+The Google Workspace CLI repository is Google-maintained but explicitly not an
+officially supported Google product and remains pre-1.0. Its MCP command was
+removed in 0.8.0; when `gws` is missing, the initializer installs the pinned CLI through an approved npm
+command instead of configuring a nonexistent transport. The `atlassian-work`,
+`github-work`, and `google-workspace` bundles add the relevant lifecycle guidance.
+
 ## Installation scope
 
 | Requirement | Behavior |
@@ -235,6 +249,7 @@ required.
 | Claude Code | Optional explicit installation using the official npm package. |
 | Antigravity CLI | Detected as `agy`; use Google's official installer when absent. The initializer does not pipe a remote script into a shell. |
 | Provider SDKs | Never installed. |
+| Provider integrations | Remote MCP configuration is project-local. The pinned `gws` CLI is a global npm install only when selected, missing, and approved in the plan. |
 | Credentials | Never collected or written; use the host's login flow. |
 
 ## Transaction and validation
@@ -281,7 +296,7 @@ uv run python scripts/initialize_agent.py \
   --host antigravity \
   --docs-provider gemini \
   --capability evidence-gathering \
-  --integration jira-cloud \
+  --integration atlassian-rovo \
   --python 3.13 \
   --install
 ```

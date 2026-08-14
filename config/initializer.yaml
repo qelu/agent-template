@@ -40,6 +40,27 @@ bundles:
       - integration-lifecycle
       - pre-commit-secret-scan
     integrations: []
+  atlassian-work:
+    description: Atlassian Rovo MCP plus integration lifecycle and post-work review guidance.
+    capabilities:
+      - integration-lifecycle
+      - post-work-review
+    integrations:
+      - atlassian-rovo
+  github-work:
+    description: GitHub MCP plus evidence and integration lifecycle guidance.
+    capabilities:
+      - evidence-gathering
+      - integration-lifecycle
+    integrations:
+      - github
+  google-workspace:
+    description: Pinned gws CLI plus its operating skill and integration lifecycle guidance.
+    capabilities:
+      - google-workspace-cli
+      - integration-lifecycle
+    integrations:
+      - google-workspace
 defaults:
   host: claude-code
   python: "3.13"

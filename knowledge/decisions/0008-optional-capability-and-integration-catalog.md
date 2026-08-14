@@ -19,7 +19,8 @@ optional capabilities and authenticated services as optional integrations.
 `config/capabilities.yaml` remains the lightweight artifact registry.
 `config/integrations.yaml` records only reviewed integration metadata: official
 source, kind, authentication mode, supported hosts, approval default, data classes,
-write capability, and an endpoint when the provider supplies a remote MCP server.
+write capability, endpoint or CLI command, non-secret credential environment name,
+and reviewed installation/setup commands where applicable.
 
 The initializer exposes capabilities, integrations, and named bundles separately.
 Current optional defaults remain explicit in `config/initializer.yaml`; future
