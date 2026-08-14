@@ -25,6 +25,12 @@ Agent Template creates a project-level harness for an existing coding-agent host
 It does not call a provider API, install a provider SDK, or implement another model
 loop. Selecting a host is selecting the runtime.
 
+It is intended for developers and teams that need portable, auditable,
+least-authority behavior across coding-agent hosts. It favors explicit policy,
+review boundaries, and reproducible validation over the simplicity of a quick
+single-host script. It is not a provider SDK, model runtime, or autonomous-agent
+framework.
+
 The generated harness combines a portable agent contract with the host's native
 configuration surface:
 

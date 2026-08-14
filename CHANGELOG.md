@@ -9,6 +9,8 @@ the project follows Semantic Versioning.
 
 - Aligned source, initializer, generated-project, contribution, release, and
   security documentation with the v1.0 host-native implementation.
+- Clarified the project's primary audience and documented the end-to-end path
+  for contributing, reviewing, and activating reusable capabilities.
 - Added Python 3.14 to the initializer's supported environment choices and
   installation receipt schema.
 
