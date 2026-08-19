@@ -655,6 +655,7 @@ def copy_host_native_template(source: Path, destination: Path, plan: Installatio
         "config/policies.yaml",
         "scripts/update_scope.py",
         "scripts/update_mcp_access.py",
+        "scripts/mcp_legacy_stdio_compat.cjs",
         "scripts/validate_harness.py",
         "templates/adr-template.md",
         "templates/runbook-template.md",
@@ -870,6 +871,7 @@ def _add_remote_mcp(
     token_env: str | None = None,
     oauth: bool = False,
     antigravity_local_bridge: bool = False,
+    antigravity_bridge_script: Path | None = None,
 ) -> Path:
     if host == "codex":
         path = destination / ".codex" / "config.toml"
@@ -899,8 +901,15 @@ def _add_remote_mcp(
         )
         server = (
             {
-                "command": "npx",
-                "args": ["-y", "mcp-remote@latest", url],
+                "command": "node",
+                "args": [
+                    str(antigravity_bridge_script),
+                    "--",
+                    "npx",
+                    "-y",
+                    "mcp-remote@latest",
+                    url,
+                ],
             }
             if antigravity_local_bridge
             else {"serverUrl": url}
@@ -938,6 +947,11 @@ def write_integration_configuration(
                 oauth=integration["auth"] == "oauth",
                 antigravity_local_bridge=(
                     plan.spec.host == "antigravity" and integration_id == "atlassian-rovo"
+                ),
+                antigravity_bridge_script=(
+                    plan.spec.destination / "scripts" / "mcp_legacy_stdio_compat.cjs"
+                    if plan.spec.host == "antigravity" and integration_id == "atlassian-rovo"
+                    else None
                 ),
             )
         lines.extend(
@@ -997,7 +1011,10 @@ def _integration_setup_guidance(integration_id: str, plan: InstallationPlan) -> 
             "antigravity": (
                 "Rovo is already configured in `.agents/mcp_config.json`.",
                 "Antigravity launches a persistent `mcp-remote` bridge so Atlassian OAuth can use its trusted localhost callback.",
-                "In Antigravity 2.0, open Settings > Customizations > Installed MCP Servers, refresh, and connect `atlassian-rovo`.",
+                "A project-local compatibility shim lets Antigravity's `server/discover` probe fall back to Atlassian's required `initialize` handshake.",
+                "Interactive initialization offers to complete the one-time OAuth bootstrap immediately.",
+                "If authentication is still pending, run `npx -p mcp-remote@latest mcp-remote-client https://mcp.atlassian.com/v1/mcp/authv2`, then restart Antigravity.",
+                "Confirm the connection under Settings > Customizations > Installed MCP Servers.",
             ),
         }[plan.spec.host]
         return (*steps, "", "Authentication remains pending until that OAuth flow succeeds.", "")

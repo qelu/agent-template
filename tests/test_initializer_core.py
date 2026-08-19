@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -24,7 +25,12 @@ from harness.initializer import (
     select_capabilities,
     unresolved_placeholders,
 )
-from scripts.initialize_agent import host_cli_unavailable_message, wizard_spec
+from scripts.initialize_agent import (
+    ATLASSIAN_ROVO_ENDPOINT,
+    bootstrap_atlassian_rovo,
+    host_cli_unavailable_message,
+    wizard_spec,
+)
 
 
 class InitializerCoreTests(unittest.TestCase):
@@ -448,15 +454,26 @@ class InitializerCoreTests(unittest.TestCase):
                     self.assertEqual(
                         antigravity_config["mcpServers"]["atlassian-rovo"],
                         {
-                            "command": "npx",
+                            "command": "node",
                             "args": [
+                                str(
+                                    plan.spec.destination
+                                    / "scripts"
+                                    / "mcp_legacy_stdio_compat.cjs"
+                                ),
+                                "--",
+                                "npx",
                                 "-y",
                                 "mcp-remote@latest",
                                 "https://mcp.atlassian.com/v1/mcp/authv2",
                             ],
                         },
                     )
+                    self.assertTrue(
+                        (destination / "scripts/mcp_legacy_stdio_compat.cjs").is_file()
+                    )
                     self.assertIn("trusted localhost callback", docs)
+                    self.assertIn("server/discover", docs)
 
             codex_config = (Path(temporary) / "codex/.codex/config.toml").read_text()
 
@@ -464,6 +481,123 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertIn('default_tools_approval_mode = "writes"', codex_config)
         self.assertIn('auth = "oauth"', codex_config)
         self.assertIn("required = false", codex_config)
+
+    def test_antigravity_interactive_init_bootstraps_atlassian_oauth(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "antigravity"
+            plan = resolve_plan(
+                self.root,
+                self.spec(
+                    destination,
+                    host="antigravity",
+                    documentation_provider="none",
+                    capabilities=(),
+                    integrations=("atlassian-rovo",),
+                ),
+            )
+            execute_plan(self.root, plan)
+            with (
+                patch("scripts.initialize_agent._ask", return_value=True),
+                patch("scripts.initialize_agent.shutil.which", return_value="/tools/npx"),
+                patch("scripts.initialize_agent.subprocess.run") as run,
+            ):
+                authenticated = bootstrap_atlassian_rovo(
+                    plan, interactive=True, no_color=True
+                )
+            receipt = yaml.safe_load(
+                (destination / ".agent-harness/installation.yaml").read_text()
+            )
+
+        self.assertTrue(authenticated)
+        run.assert_called_once_with(
+            [
+                "npx",
+                "-p",
+                "mcp-remote@latest",
+                "mcp-remote-client",
+                ATLASSIAN_ROVO_ENDPOINT,
+            ],
+            cwd=plan.spec.destination,
+            check=True,
+        )
+        self.assertEqual(receipt["integrations"][0]["authentication"], "verified")
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for the Rovo bridge")
+    def test_legacy_stdio_shim_rejects_discovery_and_forwards_initialize(self) -> None:
+        shim = self.root / "scripts/mcp_legacy_stdio_compat.cjs"
+        echo_server = (
+            "import sys\n"
+            "for line in sys.stdin.buffer:\n"
+            " sys.stdout.buffer.write(line)\n"
+            " sys.stdout.buffer.flush()\n"
+        )
+        discover = {
+            "jsonrpc": "2.0",
+            "id": "discover-1",
+            "method": "server/discover",
+            "params": {},
+        }
+        initialize = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        }
+        result = subprocess.run(
+            ["node", str(shim), "--", sys.executable, "-u", "-c", echo_server],
+            input="\n".join((json.dumps(discover), json.dumps(initialize), "")),
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        responses = [json.loads(line) for line in result.stdout.splitlines()]
+
+        self.assertIn(initialize, responses)
+        discovery_response = next(item for item in responses if item.get("id") == "discover-1")
+        self.assertEqual(discovery_response["error"]["code"], -32601)
+        self.assertNotIn(discover, responses)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for the Rovo bridge")
+    def test_legacy_stdio_shim_terminates_with_its_child(self) -> None:
+        shim = self.root / "scripts/mcp_legacy_stdio_compat.cjs"
+        process = subprocess.Popen(
+            [
+                "node",
+                str(shim),
+                "--",
+                sys.executable,
+                "-c",
+                "import time; time.sleep(30)",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        process.terminate()
+
+        self.assertNotEqual(process.wait(timeout=5), 0)
+
+    def test_atlassian_bootstrap_is_not_run_for_noninteractive_init(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            plan = resolve_plan(
+                self.root,
+                self.spec(
+                    Path(temporary) / "antigravity",
+                    host="antigravity",
+                    documentation_provider="none",
+                    capabilities=(),
+                    integrations=("atlassian-rovo",),
+                ),
+            )
+            with patch("scripts.initialize_agent.subprocess.run") as run:
+                authenticated = bootstrap_atlassian_rovo(
+                    plan, interactive=False, no_color=True
+                )
+
+        self.assertFalse(authenticated)
+        run.assert_not_called()
 
     def test_google_workspace_plans_pinned_cli_install_when_missing(self) -> None:
         def find(command: str) -> str | None:
