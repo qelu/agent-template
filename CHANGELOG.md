@@ -33,6 +33,9 @@ the project follows Semantic Versioning.
 
 ### Fixed
 
+- Prevented the interactive initializer from constructing all-disabled
+  Questionary checkboxes when bundles cover every capability or integration,
+  and hide bundles whose integrations do not support the selected host.
 - Corrected `map-skill-command` instructions to invoke the registered bundled
   helper instead of a nonexistent project-level script.
 

@@ -21,7 +21,7 @@ from harness.initializer import (
     select_capabilities,
     unresolved_placeholders,
 )
-from scripts.initialize_agent import host_cli_unavailable_message
+from scripts.initialize_agent import host_cli_unavailable_message, wizard_spec
 
 
 class InitializerCoreTests(unittest.TestCase):
@@ -89,6 +89,102 @@ class InitializerCoreTests(unittest.TestCase):
         jsonschema.Draft202012Validator(schema).validate(receipt)
         self.assertEqual(receipt["environment"]["python"], "3.14")
         self.assertIn("uv sync --python 3.14", generated_readme)
+
+    def test_wizard_all_bundles_never_builds_an_all_disabled_checkbox(self) -> None:
+        initializer = yaml.safe_load((self.root / "config" / "initializer.yaml").read_text())
+
+        def prompt(kind: str, message: str, **kwargs: object) -> dict[str, object]:
+            if kind == "checkbox":
+                choices = kwargs["choices"]
+                assert isinstance(choices, list)
+                self.assertTrue(choices)
+                self.assertTrue(all(not getattr(choice, "disabled", False) for choice in choices))
+            return {"kind": kind, "message": message, "kwargs": kwargs}
+
+        def answer(question: dict[str, object]) -> object:
+            message = str(question["message"])
+            if question["kind"] == "path":
+                return destination
+            if message.startswith("Bundles"):
+                kwargs = question["kwargs"]
+                assert isinstance(kwargs, dict)
+                choices = kwargs["choices"]
+                assert isinstance(choices, list)
+                return [choice.value for choice in choices]
+            if question["kind"] == "checkbox":
+                return []
+            if message.startswith("Host"):
+                return "antigravity"
+            if message.startswith("Official documentation"):
+                return "gemini"
+            if message.startswith("Python version"):
+                return "3.13"
+            if question["kind"] == "confirm":
+                return False
+            text_answers = {
+                "Display name": "Bundle Test",
+                "Agent ID": "bundle-test",
+                "Primary goal": "Exercise bundle selection.",
+                "Persona role": "test assistant",
+                "Communication tone": "concise",
+                "Language/locale": "en-US",
+            }
+            return next(
+                value for prefix, value in text_answers.items() if message.startswith(prefix)
+            )
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch(
+                "questionary.path",
+                side_effect=lambda message, **kwargs: prompt("path", message, **kwargs),
+            ),
+            patch(
+                "questionary.text",
+                side_effect=lambda message, **kwargs: prompt("text", message, **kwargs),
+            ),
+            patch(
+                "questionary.select",
+                side_effect=lambda message, **kwargs: prompt("select", message, **kwargs),
+            ),
+            patch(
+                "questionary.checkbox",
+                side_effect=lambda message, **kwargs: prompt("checkbox", message, **kwargs),
+            ),
+            patch(
+                "questionary.confirm",
+                side_effect=lambda message, **kwargs: prompt("confirm", message, **kwargs),
+            ),
+            patch("scripts.initialize_agent._ask", side_effect=answer),
+            patch("scripts.initialize_agent.shutil.which", return_value=None),
+        ):
+            destination = str(Path(temporary) / "agent")
+            spec = wizard_spec(self.root, no_color=True)
+
+        supported_integration_ids = {
+            choice.integration_id for choice in integration_choices(self.root, "antigravity")
+        }
+        selected_bundles = tuple(
+            bundle_id
+            for bundle_id, bundle in initializer["bundles"].items()
+            if set(bundle["integrations"]).issubset(supported_integration_ids)
+        )
+        self.assertEqual(spec.bundles, selected_bundles)
+        self.assertNotIn("github-work", spec.bundles)
+        expected_capabilities = {
+            capability
+            for bundle_id, bundle in initializer["bundles"].items()
+            if bundle_id in selected_bundles
+            for capability in bundle["capabilities"]
+        }
+        expected_integrations = {
+            integration
+            for bundle_id, bundle in initializer["bundles"].items()
+            if bundle_id in selected_bundles
+            for integration in bundle["integrations"]
+        }
+        self.assertTrue(expected_capabilities.issubset(set(spec.capabilities or ())))
+        self.assertEqual(set(spec.integrations), expected_integrations)
 
     def test_resolver_rejects_a_non_empty_destination(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
