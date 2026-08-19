@@ -238,7 +238,20 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
         )
     )
     selected_bundles: list[str] = []
-    if initializer["bundles"]:
+    supported_integration_ids = {
+        choice.integration_id for choice in integration_choices(source, host)
+    }
+    compatible_bundles = {
+        bundle_id: bundle
+        for bundle_id, bundle in initializer["bundles"].items()
+        if set(bundle["integrations"]).issubset(supported_integration_ids)
+    }
+    incompatible_bundles = {
+        bundle_id: bundle
+        for bundle_id, bundle in initializer["bundles"].items()
+        if bundle_id not in compatible_bundles
+    }
+    if compatible_bundles:
         console.print("\n[bold cyan]Optional bundles[/bold cyan]")
         selected_bundles = _ask(
             questionary.checkbox(
@@ -249,9 +262,14 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
                         value=bundle_id,
                         checked=False,
                     )
-                    for bundle_id, bundle in initializer["bundles"].items()
+                    for bundle_id, bundle in compatible_bundles.items()
                 ],
             )
+        )
+    for bundle_id, bundle in incompatible_bundles.items():
+        console.print(
+            f"  [yellow]–[/yellow] {bundle_id} [dim](unavailable for {host}) — "
+            f"{bundle['description']}[/dim]"
         )
     bundled_capabilities = {
         capability
@@ -276,6 +294,24 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
         typed_choices = [
             choice for choice in optional_choices if choice.capability_type == capability_type
         ]
+        bundled_choices = [
+            choice for choice in typed_choices if choice.capability_id in bundled_capabilities
+        ]
+        selectable_choices = [
+            choice for choice in typed_choices if choice.capability_id not in bundled_capabilities
+        ]
+        if bundled_choices:
+            console.print(
+                f"\nOptional {capability_type.replace('-', ' ').title()} capabilities",
+                style="bold cyan",
+            )
+            for choice in bundled_choices:
+                console.print(
+                    f"  [green]✓[/green] {choice.capability_id} "
+                    f"[dim](included by selected bundle) — {choice.description}[/dim]"
+                )
+        if not selectable_choices:
+            continue
         selected_optional.extend(
             _ask(
                 questionary.checkbox(
@@ -284,22 +320,23 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
                         Choice(
                             f"{choice.capability_id} — {choice.description}",
                             value=choice.capability_id,
-                            checked=(
-                                choice.selected_by_default
-                                or choice.capability_id in bundled_capabilities
-                            ),
-                            disabled=(
-                                "included by selected bundle"
-                                if choice.capability_id in bundled_capabilities
-                                else None
-                            ),
+                            checked=choice.selected_by_default,
                         )
-                        for choice in typed_choices
+                        for choice in selectable_choices
                     ],
                 )
             )
         )
-    selected = tuple([choice.capability_id for choice in required_choices] + selected_optional)
+    selected_capability_ids = {
+        *(choice.capability_id for choice in required_choices),
+        *bundled_capabilities,
+        *selected_optional,
+    }
+    selected = tuple(
+        choice.capability_id
+        for choice in choices
+        if choice.capability_id in selected_capability_ids
+    )
     integrations = integration_choices(source, host)
     selected_integrations: tuple[str, ...] = ()
     if integrations:
@@ -308,25 +345,38 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
             "Credentials are never stored in the project. Authentication happens after creation.",
             style="dim",
         )
-        selected_integrations = tuple(
-            _ask(
-                questionary.checkbox(
-                    "Optional integrations",
-                    choices=[
-                        Choice(
-                            f"{choice.integration_id} ({choice.kind}) — {choice.description}",
-                            value=choice.integration_id,
-                            checked=choice.integration_id in bundled_integrations,
-                            disabled=(
-                                "included by selected bundle"
-                                if choice.integration_id in bundled_integrations
-                                else None
-                            ),
-                        )
-                        for choice in integrations
-                    ],
+        bundled_integration_choices = [
+            choice for choice in integrations if choice.integration_id in bundled_integrations
+        ]
+        selectable_integration_choices = [
+            choice for choice in integrations if choice.integration_id not in bundled_integrations
+        ]
+        for integration_choice in bundled_integration_choices:
+            console.print(
+                f"  [green]✓[/green] {integration_choice.integration_id} "
+                f"({integration_choice.kind}) [dim](included by selected bundle) — "
+                f"{integration_choice.description}[/dim]"
+            )
+        selected_integration_ids = set(bundled_integrations)
+        if selectable_integration_choices:
+            selected_integration_ids.update(
+                _ask(
+                    questionary.checkbox(
+                        "Optional integrations",
+                        choices=[
+                            Choice(
+                                f"{choice.integration_id} ({choice.kind}) — {choice.description}",
+                                value=choice.integration_id,
+                            )
+                            for choice in selectable_integration_choices
+                        ],
+                    )
                 )
             )
+        selected_integrations = tuple(
+            choice.integration_id
+            for choice in integrations
+            if choice.integration_id in selected_integration_ids
         )
     console.print("\n[bold cyan]Environment and validation[/bold cyan]")
     console.print(
