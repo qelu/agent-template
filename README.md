@@ -322,6 +322,8 @@ change and approval history.
 - Native project settings cannot override organization-managed host policy.
 - Users must trust project-local hooks before some hosts will execute them.
 - Host bridges are defense in depth, not replacements for native sandboxing and permissions.
+- Generated hooks deny MCP servers outside the harness's explicit execution allowlist even
+  when a host exposes globally configured servers to the project.
 - Claude Code and Antigravity consume `allow`, `ask`, and `deny` directly from
   their pre-tool hooks. Codex pre-tool hooks enforce denials while its read-only
   sandbox and approval flow handle writes that require confirmation.

@@ -3,6 +3,7 @@ required_capabilities:
   - task-planning
   - safe-tool-use
   - manage-project-scope
+  - manage-mcp-access
   - map-skill-command
   - skill-auditor
   - import-external-skill

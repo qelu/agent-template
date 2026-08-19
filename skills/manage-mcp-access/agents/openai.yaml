@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage MCP Access"
+  short_description: "Control the harness MCP execution allowlist."
+  default_prompt: "Use $manage-mcp-access to review and safely change MCP server access for this harness."

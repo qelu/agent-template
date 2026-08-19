@@ -16,10 +16,12 @@ from urllib.parse import unquote, urlparse
 
 ACTIONS = {"read", "write", "delete", "external_side_effect", "unknown"}
 DECISIONS = {"allow", "ask", "deny"}
-TOP_LEVEL_KEYS = {"version", "actions", "scope", "shell", "audit"}
+TOP_LEVEL_KEYS = {"version", "actions", "scope", "mcp", "shell", "audit"}
 SCOPE_KEYS = {"allowed_read_paths", "allowed_write_paths", "denied_paths"}
+MCP_KEYS = {"mode", "allowed_servers"}
 SHELL_KEYS = {"denied_patterns"}
 AUDIT_KEYS = {"enabled"}
+MCP_SERVER = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$")
 
 READ_TOOLS = {
     "cat",
@@ -116,6 +118,7 @@ class HookEvent:
     tool_name: str | None
     tool_input: dict[str, Any]
     prompt: str | None = None
+    mcp_server: str | None = None
 
 
 @dataclass(frozen=True)
@@ -151,6 +154,16 @@ def load_policy(root: Path) -> dict[str, Any]:
     for key in SCOPE_KEYS:
         _string_list(scope[key], f"policy.scope.{key}", require_nonempty=key != "denied_paths")
 
+    mcp = _mapping(payload["mcp"], "policy.mcp")
+    _exact_keys(mcp, MCP_KEYS, "policy.mcp")
+    if mcp["mode"] != "allowlist":
+        raise ValueError("policy.mcp.mode must be allowlist")
+    _string_list(mcp["allowed_servers"], "policy.mcp.allowed_servers")
+    if len(set(mcp["allowed_servers"])) != len(mcp["allowed_servers"]):
+        raise ValueError("policy.mcp.allowed_servers must not contain duplicates")
+    if not all(MCP_SERVER.fullmatch(server) for server in mcp["allowed_servers"]):
+        raise ValueError("policy.mcp.allowed_servers contains an invalid server ID")
+
     shell = _mapping(payload["shell"], "policy.shell")
     _exact_keys(shell, SHELL_KEYS, "policy.shell")
     _string_list(shell["denied_patterns"], "policy.shell.denied_patterns")
@@ -163,6 +176,14 @@ def load_policy(root: Path) -> dict[str, Any]:
 
 
 def evaluate_policy(event: HookEvent, policy: dict[str, Any], root: Path) -> PolicyDecision:
+    mcp_server = _mcp_server(event)
+    if mcp_server is not None and mcp_server not in policy["mcp"]["allowed_servers"]:
+        return PolicyDecision(
+            "unknown",
+            "deny",
+            f"MCP server {mcp_server!r} is outside this harness's execution allowlist.",
+        )
+
     command = _command(event.tool_input)
     configured_denials = policy["shell"]["denied_patterns"]
     if command and any(pattern.lower() in command.lower() for pattern in configured_denials):
@@ -190,6 +211,22 @@ def evaluate_policy(event: HookEvent, policy: dict[str, Any], root: Path) -> Pol
         "deny": "Blocked by the portable project policy.",
     }
     return PolicyDecision(action, outcome, reasons[outcome])
+
+
+def _mcp_server(event: HookEvent) -> str | None:
+    if event.mcp_server:
+        return event.mcp_server
+    name = event.tool_name or ""
+    patterns = (
+        r"^mcp__([^_].*?)__[^_].*$",
+        r"^mcp\(([^/]+)/[^)]+\)$",
+        r"^([^:]+):[^:]+$",
+    )
+    for pattern in patterns:
+        match = re.match(pattern, name)
+        if match and MCP_SERVER.fullmatch(match.group(1)):
+            return match.group(1)
+    return None
 
 
 def classify_action(tool_name: str | None, tool_input: dict[str, Any]) -> str:
@@ -237,6 +274,7 @@ def audit_event(
         "turn_id": event.turn_id,
         "event": event.event,
         "tool_name": event.tool_name,
+        "mcp_server": _mcp_server(event),
         "action": decision.action,
         "input_digest": _digest(event.tool_input),
         "prompt_digest": _digest(event.prompt) if event.prompt is not None else None,

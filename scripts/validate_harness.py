@@ -105,6 +105,7 @@ def main() -> int:
         "config/persona.yaml",
         "config/policies.yaml",
         "scripts/update_scope.py",
+        "scripts/update_mcp_access.py",
         "config/capabilities.yaml",
         "config/integrations.yaml",
         "scripts/guardrails/core.py",

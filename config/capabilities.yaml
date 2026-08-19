@@ -28,6 +28,13 @@ capabilities:
     description: Add project folders to the harness's portable read or read-write policy scope.
     when: Use when a user wants the harness to access another folder or repository.
 
+  - id: manage-mcp-access
+    type: skill
+    status: active
+    path: skills/manage-mcp-access
+    description: Review and change the harness MCP execution allowlist without changing global MCP configuration.
+    when: Use when a user wants to enable, disable, inspect, or troubleshoot MCP access for this harness.
+
   - id: map-skill-command
     type: skill
     status: active
