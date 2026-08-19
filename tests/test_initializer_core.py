@@ -358,6 +358,10 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertIn("[mcp_servers.example-cloud]", codex_config)
             self.assertIn("example-cloud", claude_config["mcpServers"])
             self.assertIn("example-cloud", antigravity_config["mcpServers"])
+            self.assertEqual(
+                antigravity_config["mcpServers"]["example-cloud"],
+                {"serverUrl": "https://example.com/mcp"},
+            )
             self.assertEqual(receipt["integrations"][0]["authentication"], "pending")
             self.assertTrue((destinations["codex"] / "docs/integrations.md").is_file())
 
@@ -434,6 +438,22 @@ class InitializerCoreTests(unittest.TestCase):
                 )
                 self.assertIn(guidance, docs)
                 self.assertEqual(receipt["integrations"][0]["authentication"], "pending")
+                if host == "antigravity":
+                    antigravity_config = json.loads(
+                        (destination / ".agents/mcp_config.json").read_text()
+                    )
+                    self.assertEqual(
+                        antigravity_config["mcpServers"]["atlassian-rovo"],
+                        {
+                            "command": "npx",
+                            "args": [
+                                "-y",
+                                "mcp-remote@latest",
+                                "https://mcp.atlassian.com/v1/mcp/authv2",
+                            ],
+                        },
+                    )
+                    self.assertIn("trusted localhost callback", docs)
 
             codex_config = (Path(temporary) / "codex/.codex/config.toml").read_text()
 

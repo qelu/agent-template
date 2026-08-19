@@ -229,7 +229,7 @@ Current provider adapters are deliberately different where provider contracts di
 
 | Selection | Adapter | Authentication | Hosts |
 | --- | --- | --- | --- |
-| `atlassian-rovo` | Atlassian remote MCP at the current `authv2` endpoint | Host-managed OAuth 2.1 | Codex, Claude Code, Antigravity |
+| `atlassian-rovo` | Atlassian remote MCP at the current `authv2` endpoint; Antigravity uses a persistent `mcp-remote` bridge for its Atlassian-trusted localhost callback | Host-managed OAuth 2.1 | Codex, Claude Code, Antigravity |
 | `github` | GitHub official remote MCP | Fine-grained token from `GITHUB_PERSONAL_ACCESS_TOKEN`; never written to project config | Codex, Claude Code |
 | `google-workspace` | `gws` CLI, securely installed Desktop OAuth client, and operating skill; missing-command install is pinned to 0.22.5 | Provider CLI OAuth | Codex, Claude Code, Antigravity |
 
