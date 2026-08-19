@@ -97,6 +97,35 @@
         "items": {"type": "string", "minLength": 1}
       }
     },
+    "integration_setup": {
+      "type": "object",
+      "properties": {
+        "google_workspace": {
+          "type": "object",
+          "required": [
+            "client_configured",
+            "client_target",
+            "services",
+            "readonly",
+            "authentication"
+          ],
+          "properties": {
+            "client_configured": {"const": true},
+            "client_target": {"type": "string", "minLength": 1},
+            "services": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "readonly": {"type": "boolean"},
+            "authentication": {"enum": ["pending", "verified"]}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "validation": {"enum": ["pending", "passed"]}
   },
   "additionalProperties": false

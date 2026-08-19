@@ -7,6 +7,9 @@ the project follows Semantic Versioning.
 
 ### Added
 
+- Added secure Google Workspace Desktop OAuth-client import, selectable service and
+  read-only scope guidance, user-level setup receipts, and exact Rovo authentication
+  instructions for Codex, Claude Code, and Antigravity 2.0.
 - Added separate optional integration and bundle catalogs, initializer flags and
   wizard selection, native remote-MCP configuration, setup guidance, receipts,
   validation, and trust-boundary documentation.

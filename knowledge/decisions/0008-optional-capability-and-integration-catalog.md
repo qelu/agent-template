@@ -28,9 +28,13 @@ catalog additions are opt-in unless a reviewed compatibility change adds them to
 that list. Bundles are transparent selection shortcuts, never hidden authority.
 
 Authentication occurs after generation through the selected host or provider.
-Tokens and credentials are never written to the project. Optional integrations do
-not make host startup fail when disconnected. Generated receipts record selection
-and authentication as pending, not secret material.
+Tokens and credentials are never written to the project. An integration may request
+an existing provider client configuration when it is required to prime the provider
+login: the initializer validates it without displaying secrets, writes it only to the
+provider-designated user configuration with restrictive permissions, and refuses to
+overwrite a different existing client. Optional integrations do not make host startup
+fail when disconnected. Generated receipts record non-secret setup metadata and
+authentication as pending, not secret material.
 
 ## Consequences
 

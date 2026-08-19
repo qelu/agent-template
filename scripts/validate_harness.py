@@ -250,6 +250,16 @@ def main() -> int:
         }
         if receipt_ids != configured_ids:
             errors.append("Installation receipt integrations do not match the catalog")
+        if "google-workspace" in configured_ids:
+            setup = receipt.get("integration_setup", {})
+            google_setup = setup.get("google_workspace", {}) if isinstance(setup, dict) else {}
+            if not isinstance(google_setup, dict) or not google_setup.get("client_configured"):
+                errors.append("Google Workspace OAuth client setup is not recorded")
+            for credential_name in ("credentials.json", "client_secret.json"):
+                if any(ROOT.rglob(credential_name)):
+                    errors.append(
+                        f"Google Workspace credential must not be copied into the project: {credential_name}"
+                    )
     except (
         OSError,
         ValueError,

@@ -139,12 +139,62 @@ class InitializerTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("unrecognized arguments", result.stderr)
 
+    def test_rovo_and_google_workspace_are_primed_together(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "primed-agent"
+            client = root / "desktop-client.json"
+            client.write_text(
+                json.dumps(
+                    {
+                        "installed": {
+                            "client_id": "test-client",
+                            "client_secret": "test-secret",
+                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                            "token_uri": "https://oauth2.googleapis.com/token",
+                            "redirect_uris": ["http://localhost"],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            client.chmod(0o600)
+            gws_config = root / "gws"
+            result = self._initialize(
+                destination,
+                "codex",
+                extra=(
+                    "--docs-provider",
+                    "none",
+                    "--bundle",
+                    "atlassian-work",
+                    "--bundle",
+                    "google-workspace",
+                    "--google-workspace-client",
+                    str(client),
+                    "--google-workspace-service",
+                    "gmail",
+                    "--yes",
+                ),
+                env={"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(gws_config)},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((gws_config / "client_secret.json").is_file())
+            self.assertFalse(any(destination.rglob("client_secret.json")))
+            codex = (destination / ".codex/config.toml").read_text()
+            docs = (destination / "docs/integrations.md").read_text()
+            self.assertIn("[mcp_servers.atlassian-rovo]", codex)
+            self.assertIn('auth = "oauth"', codex)
+            self.assertIn("gws auth login --readonly -s gmail", docs)
+
     def _initialize(
         self,
         destination: Path,
         host: str,
         *,
         extra: tuple[str, ...] = (),
+        env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         command = [
             sys.executable,
@@ -169,7 +219,7 @@ class InitializerTests(unittest.TestCase):
             command,
             capture_output=True,
             text=True,
-            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **(env or {})},
         )
 
 
