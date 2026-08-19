@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import shlex
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,8 @@ HOST_CLI_NAMES = {
     "claude-code": "Claude Code",
     "antigravity": "Antigravity",
 }
+
+ATLASSIAN_ROVO_ENDPOINT = "https://mcp.atlassian.com/v1/mcp/authv2"
 
 
 def host_cli_unavailable_message(host: str, binary: str) -> str:
@@ -681,6 +684,66 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
     )
 
 
+def bootstrap_atlassian_rovo(plan: InstallationPlan, *, interactive: bool, no_color: bool) -> bool:
+    """Offer Antigravity users a one-time Rovo OAuth bootstrap after generation."""
+    if (
+        not interactive
+        or plan.spec.host != "antigravity"
+        or "atlassian-rovo" not in plan.integrations
+    ):
+        return False
+
+    import questionary
+    from rich.console import Console
+
+    console = Console(no_color=no_color)
+    console.print("\n[bold cyan]Atlassian Rovo authentication[/bold cyan]")
+    console.print(
+        "Antigravity needs a one-time localhost OAuth bootstrap before it can use Jira or "
+        "Confluence. Your browser will open so you can review and approve access.",
+        style="dim",
+    )
+    if not _ask(questionary.confirm("Authenticate Atlassian Rovo now?", default=True)):
+        console.print(
+            "Authentication remains pending. Follow docs/integrations.md before using Rovo.",
+            style="yellow",
+        )
+        return False
+    if not shutil.which("npx"):
+        console.print(
+            "Cannot start Atlassian authentication because `npx` is not available. Install "
+            "Node.js, then follow docs/integrations.md.",
+            style="yellow",
+        )
+        return False
+
+    command = [
+        "npx",
+        "-p",
+        "mcp-remote@latest",
+        "mcp-remote-client",
+        ATLASSIAN_ROVO_ENDPOINT,
+    ]
+    try:
+        subprocess.run(command, cwd=plan.spec.destination, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        console.print(
+            "The harness was created, but Atlassian authentication did not complete. "
+            f"Retry the command documented in docs/integrations.md. ({exc})",
+            style="yellow",
+        )
+        return False
+
+    receipt_path = plan.spec.destination / ".agent-harness" / "installation.yaml"
+    receipt = yaml.safe_load(receipt_path.read_text(encoding="utf-8"))
+    for integration in receipt.get("integrations", []):
+        if integration.get("id") == "atlassian-rovo":
+            integration["authentication"] = "verified"
+    receipt_path.write_text(yaml.safe_dump(receipt, sort_keys=False), encoding="utf-8")
+    console.print("Atlassian Rovo authentication completed.", style="green")
+    return True
+
+
 def main() -> int:
     args = parser().parse_args()
     interactive = args.wizard or args.destination is None
@@ -702,6 +765,7 @@ def main() -> int:
     ):
         raise InitializerError("External commands or user-level integration setup require --yes")
     execute_plan(ROOT, plan)
+    bootstrap_atlassian_rovo(plan, interactive=interactive, no_color=args.no_color)
     show_success(plan, no_color=args.no_color)
     return 0
 

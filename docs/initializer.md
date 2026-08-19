@@ -231,7 +231,10 @@ overwriting a different client. On POSIX systems, the source must already be pri
 (`chmod 600`) so initialization does not leave a broadly readable secret behind.
 Generated `docs/integrations.md` covers one-time
 authentication, read-only smoke testing, scope review, and write-confirmation checks.
-The receipt records integration setup with authentication initially `pending`.
+When Antigravity and `atlassian-rovo` are selected, interactive initialization offers to
+launch the standalone `mcp-remote-client` OAuth flow after the harness is safely created.
+Skipping or failing that optional login leaves the harness intact with authentication
+`pending`; a successful bootstrap records it as `verified` in the installation receipt.
 
 Current provider adapters are deliberately different where provider contracts differ:
 
