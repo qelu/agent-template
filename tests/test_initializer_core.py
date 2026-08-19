@@ -1,4 +1,6 @@
 import json
+import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -10,6 +12,7 @@ import jsonschema
 import yaml
 
 from harness.initializer import (
+    GOOGLE_WORKSPACE_DEFAULT_SERVICES,
     InitializationSpec,
     InitializerError,
     capability_choices,
@@ -42,6 +45,25 @@ class InitializerCoreTests(unittest.TestCase):
         }
         values.update(overrides)
         return InitializationSpec(**values)  # type: ignore[arg-type]
+
+    def google_client(self, root: Path, *, client_id: str = "test-client") -> Path:
+        path = root / f"{client_id}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "installed": {
+                        "client_id": client_id,
+                        "client_secret": "test-secret",
+                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token",
+                        "redirect_uris": ["http://localhost"],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        path.chmod(0o600)
+        return path
 
     def test_resolver_adds_required_capabilities_and_host_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -111,6 +133,8 @@ class InitializerCoreTests(unittest.TestCase):
                 choices = kwargs["choices"]
                 assert isinstance(choices, list)
                 return [choice.value for choice in choices]
+            if message.startswith("Google Workspace services"):
+                return list(GOOGLE_WORKSPACE_DEFAULT_SERVICES)
             if question["kind"] == "checkbox":
                 return []
             if message.startswith("Host"):
@@ -385,26 +409,38 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertEqual(validation.returncode, 0, validation.stderr)
 
     def test_atlassian_bundle_uses_current_authv2_endpoint(self) -> None:
+        expected_guidance = {
+            "codex": "codex mcp login atlassian-rovo",
+            "claude-code": "run `/mcp`",
+            "antigravity": "Installed MCP Servers",
+        }
         with tempfile.TemporaryDirectory() as temporary:
-            destination = Path(temporary) / "agent"
-            plan = resolve_plan(
-                self.root,
-                self.spec(
-                    destination,
-                    host="codex",
-                    documentation_provider="none",
-                    capabilities=(),
-                    bundles=("atlassian-work",),
-                ),
-            )
-            execute_plan(self.root, plan)
-            config = (destination / ".codex/config.toml").read_text()
-            receipt = yaml.safe_load((destination / ".agent-harness/installation.yaml").read_text())
+            for host, guidance in expected_guidance.items():
+                destination = Path(temporary) / host
+                plan = resolve_plan(
+                    self.root,
+                    self.spec(
+                        destination,
+                        host=host,
+                        documentation_provider="none",
+                        capabilities=(),
+                        bundles=("atlassian-work",),
+                    ),
+                )
+                execute_plan(self.root, plan)
+                docs = (destination / "docs/integrations.md").read_text()
+                receipt = yaml.safe_load(
+                    (destination / ".agent-harness/installation.yaml").read_text()
+                )
+                self.assertIn(guidance, docs)
+                self.assertEqual(receipt["integrations"][0]["authentication"], "pending")
 
-        self.assertIn("https://mcp.atlassian.com/v1/mcp/authv2", config)
-        self.assertIn('default_tools_approval_mode = "writes"', config)
-        self.assertIn("required = false", config)
-        self.assertEqual(receipt["integrations"][0]["authentication"], "pending")
+            codex_config = (Path(temporary) / "codex/.codex/config.toml").read_text()
+
+        self.assertIn("https://mcp.atlassian.com/v1/mcp/authv2", codex_config)
+        self.assertIn('default_tools_approval_mode = "writes"', codex_config)
+        self.assertIn('auth = "oauth"', codex_config)
+        self.assertIn("required = false", codex_config)
 
     def test_google_workspace_plans_pinned_cli_install_when_missing(self) -> None:
         def find(command: str) -> str | None:
@@ -413,7 +449,12 @@ class InitializerCoreTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch("harness.initializer.shutil.which", side_effect=find),
+            patch.dict(
+                os.environ,
+                {"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(Path(temporary) / "gws")},
+            ),
         ):
+            client = self.google_client(Path(temporary))
             plan = resolve_plan(
                 self.root,
                 self.spec(
@@ -421,6 +462,7 @@ class InitializerCoreTests(unittest.TestCase):
                     host="codex",
                     capabilities=(),
                     bundles=("google-workspace",),
+                    google_workspace_client=client,
                 ),
             )
 
@@ -442,7 +484,12 @@ class InitializerCoreTests(unittest.TestCase):
             patch(
                 "harness.initializer.shutil.which", side_effect=lambda command: f"/tools/{command}"
             ),
+            patch.dict(
+                os.environ,
+                {"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(Path(temporary) / "gws")},
+            ),
         ):
+            client = self.google_client(Path(temporary))
             destination = Path(temporary) / "agent"
             plan = resolve_plan(
                 self.root,
@@ -451,16 +498,93 @@ class InitializerCoreTests(unittest.TestCase):
                     host="codex",
                     capabilities=(),
                     bundles=("google-workspace",),
+                    google_workspace_client=client,
                 ),
             )
             execute_plan(self.root, plan)
             skill = destination / ".agents/skills/google-workspace-cli"
             docs = (destination / "docs/integrations.md").read_text()
+            installed_client = Path(temporary) / "gws/client_secret.json"
+            receipt = yaml.safe_load((destination / ".agent-harness/installation.yaml").read_text())
 
             self.assertTrue((skill / "SKILL.md").is_file())
             self.assertTrue((skill / "references/setup.md").is_file())
-            self.assertIn("gws auth setup", docs)
-            self.assertIn("gws auth login -s drive,gmail,calendar", docs)
+            self.assertIn("gws auth login --readonly -s gmail,drive,calendar", docs)
+            self.assertIn("Google Workspace is CLI-backed; no MCP entry is generated", docs)
+            self.assertEqual(stat.S_IMODE(installed_client.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(installed_client.parent.stat().st_mode), 0o700)
+            self.assertFalse(any(destination.rglob("client_secret.json")))
+            self.assertTrue(receipt["integration_setup"]["google_workspace"]["client_configured"])
+
+    def test_google_workspace_rejects_a_token_as_the_oauth_client(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            token = root / "token.json"
+            token.write_text(
+                json.dumps({"refresh_token": "secret", "client_id": "client"}),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(InitializerError, "Desktop client"):
+                resolve_plan(
+                    self.root,
+                    self.spec(
+                        root / "agent",
+                        host="codex",
+                        capabilities=(),
+                        bundles=("google-workspace",),
+                        google_workspace_client=token,
+                    ),
+                )
+
+    def test_google_workspace_rejects_a_broadly_readable_oauth_client(self) -> None:
+        if os.name != "posix":
+            self.skipTest("POSIX file modes are required")
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(
+                os.environ,
+                {"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(Path(temporary) / "gws")},
+            ),
+        ):
+            root = Path(temporary)
+            client = self.google_client(root)
+            client.chmod(0o644)
+            with self.assertRaisesRegex(InitializerError, "chmod 600"):
+                resolve_plan(
+                    self.root,
+                    self.spec(
+                        root / "agent",
+                        host="codex",
+                        capabilities=(),
+                        bundles=("google-workspace",),
+                        google_workspace_client=client,
+                    ),
+                )
+
+    def test_google_workspace_refuses_to_overwrite_a_different_client(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(
+                os.environ,
+                {"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(Path(temporary) / "gws")},
+            ),
+        ):
+            root = Path(temporary)
+            config = root / "gws"
+            config.mkdir()
+            self.google_client(config, client_id="existing").replace(config / "client_secret.json")
+            replacement = self.google_client(root, client_id="replacement")
+            with self.assertRaisesRegex(InitializerError, "refusing to overwrite"):
+                resolve_plan(
+                    self.root,
+                    self.spec(
+                        root / "agent",
+                        host="codex",
+                        capabilities=(),
+                        bundles=("google-workspace",),
+                        google_workspace_client=replacement,
+                    ),
+                )
 
     def test_missing_host_install_is_explicit_and_uses_official_package(self) -> None:
         def find(command: str) -> str | None:

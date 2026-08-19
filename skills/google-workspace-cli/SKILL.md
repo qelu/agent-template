@@ -5,14 +5,16 @@ description: Operate Gmail, Drive, Calendar, Docs, Sheets, Chat, and other Googl
 
 # Google Workspace CLI
 
-1. Confirm `gws` is installed. For setup, authentication, version, and support
+1. Confirm `gws` is installed and run `gws auth status`. For OAuth-client setup,
+   authentication, version, and support
    boundaries, read [references/setup.md](references/setup.md).
 2. Identify the exact service, resource, tenant or account, data class, and whether the
    request is read-only or write-capable.
 3. Inspect unfamiliar operations with `gws <service> --help` and
    `gws schema <service>.<resource>.<method>` before constructing parameters.
-4. Authenticate with only the services and scopes needed for the task. Keep credentials
-   in the OS keyring or provider-designated user configuration, never this project.
+4. Authenticate with only the services and scopes needed for the task. Use the Desktop
+   OAuth client installed by the initializer in the provider-designated user
+   configuration and keep resulting credentials in the OS keyring, never this project.
 5. Prefer list or get operations first. Bound page sizes and page counts; avoid broad
    mailbox, drive, or directory exports unless explicitly requested.
 6. For writes, show the exact target and payload, use `--dry-run` when the command

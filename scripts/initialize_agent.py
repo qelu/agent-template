@@ -18,6 +18,8 @@ sys.path.insert(0, str(ROOT))
 from harness.initializer import (  # noqa: E402
     DEFAULT_DOCUMENTATION_PROVIDER,
     DOCUMENTATION_PROVIDERS,
+    GOOGLE_WORKSPACE_DEFAULT_SERVICES,
+    GOOGLE_WORKSPACE_SERVICES,
     HOSTS,
     InitializationSpec,
     InstallationPlan,
@@ -25,6 +27,8 @@ from harness.initializer import (  # noqa: E402
     capability_choices,
     destination_error,
     execute_plan,
+    google_workspace_client_error,
+    google_workspace_config_dir,
     integration_choices,
     load_initializer_config,
     resolve_plan,
@@ -116,6 +120,23 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="install a missing selected host CLI after plan approval",
     )
+    result.add_argument(
+        "--google-workspace-client",
+        type=Path,
+        help="existing Google Desktop OAuth client JSON to install in the user gws configuration",
+    )
+    result.add_argument(
+        "--google-workspace-service",
+        action="append",
+        choices=GOOGLE_WORKSPACE_SERVICES,
+        help="Google Workspace service to authorize; repeat as needed",
+    )
+    result.add_argument(
+        "--google-workspace-readonly",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="request read-only Google Workspace scopes during the later login",
+    )
     result.add_argument("--dry-run", action="store_true", help="resolve and print without changes")
     result.add_argument(
         "--yes",
@@ -154,6 +175,11 @@ def cli_spec(args: argparse.Namespace) -> InitializationSpec:
         development_tools=args.dev_tools,
         security_tools=args.security_tools,
         install_host_tool=args.install_host_tool,
+        google_workspace_client=args.google_workspace_client,
+        google_workspace_services=tuple(
+            args.google_workspace_service or GOOGLE_WORKSPACE_DEFAULT_SERVICES
+        ),
+        google_workspace_readonly=args.google_workspace_readonly,
     )
 
 
@@ -378,6 +404,52 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
             for choice in integrations
             if choice.integration_id in selected_integration_ids
         )
+    google_workspace_client: Path | None = None
+    google_workspace_services = GOOGLE_WORKSPACE_DEFAULT_SERVICES
+    google_workspace_readonly = True
+    if "google-workspace" in selected_integrations:
+        existing_client = google_workspace_config_dir() / "client_secret.json"
+        console.print("\n[bold cyan]Google Workspace authentication[/bold cyan]")
+        console.print(
+            "Provide a Google Desktop OAuth client. It will be installed in the user gws "
+            "configuration and never copied into the generated project.",
+            style="dim",
+        )
+        google_workspace_client = Path(
+            _ask(
+                questionary.path(
+                    "Google Desktop OAuth client JSON",
+                    default=str(existing_client) if existing_client.is_file() else "",
+                    validate=lambda value: google_workspace_client_error(Path(value)) or True,
+                )
+            )
+        )
+        google_workspace_services = tuple(
+            _ask(
+                questionary.checkbox(
+                    "Google Workspace services to authorize",
+                    choices=[
+                        Choice(
+                            service,
+                            value=service,
+                            checked=service in GOOGLE_WORKSPACE_DEFAULT_SERVICES,
+                        )
+                        for service in GOOGLE_WORKSPACE_SERVICES
+                    ],
+                    validate=lambda selected: (
+                        bool(selected) or "Select at least one Google Workspace service"
+                    ),
+                )
+            )
+        )
+        google_workspace_readonly = bool(
+            _ask(
+                questionary.confirm(
+                    "Request read-only Google Workspace scopes?",
+                    default=True,
+                )
+            )
+        )
     console.print("\n[bold cyan]Environment and validation[/bold cyan]")
     console.print(
         "Provisioning creates a project-local .venv; it never replaces system Python.",
@@ -477,6 +549,9 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
         development_tools=development_tools,
         security_tools=security_tools,
         install_host_tool=install_host_tool,
+        google_workspace_client=google_workspace_client,
+        google_workspace_services=google_workspace_services,
+        google_workspace_readonly=google_workspace_readonly,
     )
 
 
@@ -509,6 +584,16 @@ def plan_payload(plan: InstallationPlan) -> dict[str, object]:
             status.command: "detected" if status.available else "missing" for status in plan.tools
         },
         "external_commands": [shlex.join(command) for command in plan.external_commands],
+        "integration_setup": (
+            {
+                "google_workspace_client_target": str(plan.google_workspace_client_target),
+                "google_workspace_services": list(plan.spec.google_workspace_services),
+                "google_workspace_readonly": plan.spec.google_workspace_readonly,
+                "google_workspace_login": "pending",
+            }
+            if plan.google_workspace_client_target is not None
+            else {}
+        ),
     }
 
 
@@ -525,9 +610,10 @@ def show_plan(plan: InstallationPlan, *, interactive: bool, no_color: bool) -> b
     console = Console(no_color=no_color)
     rendered = yaml.safe_dump(payload, sort_keys=False).rstrip()
     console.print(Panel(Syntax(rendered, "yaml"), title="Installation plan", border_style="cyan"))
-    if plan.external_commands:
+    if plan.external_commands or plan.google_workspace_client_target is not None:
         console.print(
-            "The commands under external_commands modify tools outside the destination.",
+            "External commands and integration setup may modify user-level configuration "
+            "outside the destination.",
             style="yellow",
         )
     return bool(_ask(questionary.confirm("Create this harness?", default=False)))
@@ -609,8 +695,12 @@ def main() -> int:
     if args.dry_run:
         print("Dry run complete. No changes were made.")
         return 0
-    if plan.external_commands and not interactive and not args.yes:
-        raise InitializerError("External installation commands require --yes")
+    if (
+        (plan.external_commands or plan.google_workspace_client_target is not None)
+        and not interactive
+        and not args.yes
+    ):
+        raise InitializerError("External commands or user-level integration setup require --yes")
     execute_plan(ROOT, plan)
     show_success(plan, no_color=args.no_color)
     return 0

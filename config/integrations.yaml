@@ -54,7 +54,7 @@ integrations:
     status: active
     kind: official-cli
     provider: Google Workspace open source
-    description: Install the Google-maintained gws CLI for structured Gmail, Drive, Calendar, Docs, Sheets, and related API operations.
+    description: Install and prime the Google-maintained gws CLI with a user-supplied Desktop OAuth client for structured Workspace operations.
     official_source: https://github.com/googleworkspace/cli
     auth: provider-cli
     hosts:
@@ -79,6 +79,4 @@ integrations:
       - install
       - --global
       - "@googleworkspace/cli@0.22.5"
-    setup_commands:
-      - gws auth setup
-      - gws auth login -s drive,gmail,calendar
+    setup_commands: []

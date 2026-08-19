@@ -167,8 +167,9 @@ uv run python scripts/initialize_agent.py \
 
 Use `--dry-run` to inspect the complete installation plan without changing
 anything. New and existing empty destinations are supported; existing files are
-never overwritten. Provider credentials are never requested or written;
-authentication stays in the selected host.
+never overwritten. Provider credentials are never written into the generated project.
+Google Workspace may securely install a user-supplied Desktop OAuth client in the
+provider's user-level configuration; authentication stays with the selected host or CLI.
 
 See the [terminal initializer guide](docs/initializer.md) for every option,
 generated path, installation boundary, receipt field, and failure behavior.
@@ -267,8 +268,10 @@ official provider CLIs, and host plugins. The initializer offers only active ent
 compatible with the selected host. Use `--integration ID` or `--bundle ID` to opt in.
 Generated projects contain the selected manifest and `docs/integrations.md`; remote
 MCP entries are merged into native host configuration. Credentials are never copied
-into the project, authentication remains pending until completed through the host or
-provider, and optional servers do not become required for host startup.
+into the project. When Google Workspace is selected, the initializer validates a
+user-supplied Desktop OAuth client and installs it with user-only permissions in the
+standard `gws` configuration directory. Authentication remains pending until completed
+through the host or provider, and optional servers do not become required for startup.
 
 The initial provider catalog contains:
 
@@ -276,8 +279,8 @@ The initial provider catalog contains:
   using Atlassian's current OAuth 2.1 endpoint on every concrete host;
 - GitHub's official remote MCP on Codex and Claude Code, using only the
   `GITHUB_PERSONAL_ACCESS_TOKEN` environment variable for a narrowly scoped token; and
-- the Google-maintained `gws` CLI with a packaged operating skill and an installer
-  pinned to 0.22.5 when the command is missing.
+- the Google-maintained `gws` CLI with a securely imported Desktop OAuth client,
+  packaged operating skill, and installer pinned to 0.22.5 when the command is missing.
   The upstream project is pre-1.0, states that it is not an officially supported
   Google product, and removed its MCP command in 0.8.0, so the template does not
   invent a Google Workspace MCP server.

@@ -10,11 +10,32 @@
 
 ## Authentication
 
-The official project documents these interactive flows:
+When this integration is selected, the initializer requests an existing Google Desktop
+OAuth client JSON, validates its `installed` structure without displaying secrets, and
+installs it at `~/.config/gws/client_secret.json` (or the directory selected through
+`GOOGLE_WORKSPACE_CLI_CONFIG_DIR`). The directory is restricted to the user and the file
+uses mode `0600`. The client file is never copied into the generated project.
+On POSIX systems, the source client must already be private (`chmod 600`) before import.
+
+The initializer refuses to overwrite a different existing client. Resolve that conflict
+outside the initialization transaction and confirm which Google Cloud project should own
+the authorization before retrying.
+
+Complete the one-time browser login after generation:
+
+```sh
+gws auth login --readonly -s gmail,drive,calendar
+gws auth status
+```
+
+Choose a narrower service list when possible. Omit `--readonly` only when the task truly
+requires writes and the user has approved that authority.
+
+The official project also documents these alternative interactive flows:
 
 1. `gws auth setup` when `gcloud` is installed and the user authorizes Cloud project
    creation, API enablement, and login.
-2. `gws auth login -s drive,gmail,calendar` or a narrower service list when the project
+2. `gws auth login -s gmail,drive,calendar` or a narrower service list when the project
    is already configured.
 3. Manual Desktop OAuth client setup when automated setup is inappropriate.
 

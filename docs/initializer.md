@@ -215,12 +215,15 @@ default approval posture. The wizard offers only active entries supported by the
 selected host. Non-interactive callers repeat `--integration ID`, or use
 `--bundle ID` as a reviewed shortcut.
 
-The initializer never asks for or writes credentials. It merges selected remote
-MCP servers into native host configuration with optional startup behavior and
-writes `docs/integrations.md` for post-generation authentication, read-only smoke
-testing, scope review, and write-confirmation checks. The installation receipt
-records each selection with authentication initially `pending` unless none is
-required.
+The initializer never writes credentials into the generated project. It merges selected
+remote MCP servers into native host configuration with optional startup behavior. For
+Google Workspace, it requests and validates an existing Desktop OAuth client JSON, then
+installs it with user-only permissions in the standard `gws` user configuration without
+overwriting a different client. On POSIX systems, the source must already be private
+(`chmod 600`) so initialization does not leave a broadly readable secret behind.
+Generated `docs/integrations.md` covers one-time
+authentication, read-only smoke testing, scope review, and write-confirmation checks.
+The receipt records integration setup with authentication initially `pending`.
 
 Current provider adapters are deliberately different where provider contracts differ:
 
@@ -228,12 +231,13 @@ Current provider adapters are deliberately different where provider contracts di
 | --- | --- | --- | --- |
 | `atlassian-rovo` | Atlassian remote MCP at the current `authv2` endpoint | Host-managed OAuth 2.1 | Codex, Claude Code, Antigravity |
 | `github` | GitHub official remote MCP | Fine-grained token from `GITHUB_PERSONAL_ACCESS_TOKEN`; never written to project config | Codex, Claude Code |
-| `google-workspace` | `gws` CLI plus optional operating skill; missing-command install is pinned to 0.22.5 | Provider CLI OAuth | Codex, Claude Code, Antigravity |
+| `google-workspace` | `gws` CLI, securely installed Desktop OAuth client, and operating skill; missing-command install is pinned to 0.22.5 | Provider CLI OAuth | Codex, Claude Code, Antigravity |
 
 The Google Workspace CLI repository is Google-maintained but explicitly not an
 officially supported Google product and remains pre-1.0. Its MCP command was
 removed in 0.8.0; when `gws` is missing, the initializer installs the pinned CLI through an approved npm
-command instead of configuring a nonexistent transport. The `atlassian-work`,
+command instead of configuring a nonexistent transport. The wizard asks which Workspace
+services to authorize and defaults the later login guidance to read-only. The `atlassian-work`,
 `github-work`, and `google-workspace` bundles add the relevant lifecycle guidance.
 
 ## Installation scope
@@ -250,7 +254,7 @@ command instead of configuring a nonexistent transport. The `atlassian-work`,
 | Antigravity CLI | Detected as `agy`; use Google's official installer when absent. The initializer does not pipe a remote script into a shell. |
 | Provider SDKs | Never installed. |
 | Provider integrations | Remote MCP configuration is project-local. The pinned `gws` CLI is a global npm install only when selected, missing, and approved in the plan. |
-| Credentials | Never collected or written; use the host's login flow. |
+| Credentials | Never written to the generated project. A selected Google Desktop OAuth client is installed at `~/.config/gws/client_secret.json`, or under `GOOGLE_WORKSPACE_CLI_CONFIG_DIR`, with mode `0600`. |
 
 ## Transaction and validation
 
@@ -280,6 +284,7 @@ supplied empty destination unchanged.
 - immutable provenance and audit verdicts for subsequently imported skills
 - environment and security-tool choices
 - approved external commands
+- non-secret integration setup metadata, including selected Google Workspace services
 - `validation: pending` or `validation: passed`
 
 ## Non-interactive operation
@@ -316,6 +321,9 @@ uv run python scripts/initialize_agent.py \
 | `--dev-tools` / `--no-dev-tools` | Include or omit development tools. |
 | `--security-tools` | Run Gitleaks; on macOS, a missing binary can be installed through Homebrew after plan approval. |
 | `--install-host-tool` | Plan an approved Codex or Claude Code CLI installation when absent. |
+| `--google-workspace-client PATH` | Existing Google Desktop OAuth client JSON; required when Google Workspace is selected unless the standard `gws` client already exists. |
+| `--google-workspace-service SERVICE` | Workspace service to authorize; repeat as needed. Defaults to Gmail, Drive, and Calendar. |
+| `--google-workspace-readonly` / `--no-google-workspace-readonly` | Generate read-only or write-capable login guidance; read-only is the default. |
 | `--yes` | Approve external commands non-interactively. |
 | `--dry-run` | Print the plan without writing. |
 | `--no-color` | Disable terminal color. |
