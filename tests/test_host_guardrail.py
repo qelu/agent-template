@@ -20,6 +20,7 @@ POLICY = {
         "allowed_write_paths": ["."],
         "denied_paths": [".env", ".env.*", ".ssh", ".ssh/**", "secrets", "secrets/**"],
     },
+    "mcp": {"mode": "allowlist", "allowed_servers": ["atlassian-rovo"]},
     "shell": {"denied_patterns": ["rm -rf /", "mkfs"]},
     "audit": {"enabled": True},
 }
@@ -158,6 +159,61 @@ class HostGuardrailTests(unittest.TestCase):
             for host, key in (("claude_code", "command"), ("antigravity", "CommandLine")):
                 result = self.invoke(root, host, "run_command", {key: "git push origin main"})
                 self.assertEqual(self.decision(result, host), "ask")
+
+    def test_unselected_mcp_is_denied_across_hosts(self) -> None:
+        for host in ("codex", "claude_code", "antigravity"):
+            with self.subTest(host=host), tempfile.TemporaryDirectory() as temporary:
+                root = self.root(temporary)
+                result = self.invoke(root, host, "mcp__wikijs__search", {"query": "CDSM-42922"})
+                self.assertEqual(self.decision(result, host), "deny")
+                self.assertIn("outside this harness's execution allowlist", result.stdout)
+
+    def test_selected_mcp_reaches_native_approval_flow(self) -> None:
+        for host in ("codex", "claude_code", "antigravity"):
+            with self.subTest(host=host), tempfile.TemporaryDirectory() as temporary:
+                root = self.root(temporary)
+                result = self.invoke(
+                    root,
+                    host,
+                    "mcp__atlassian-rovo__get_issue",
+                    {"issue_key": "CDSM-42922"},
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                if host == "codex":
+                    self.assertEqual(result.stdout, "")
+                else:
+                    self.assertEqual(self.decision(result, host), "ask")
+
+    def test_antigravity_uses_explicit_mcp_server_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.root(temporary)
+            payload = {
+                "toolCall": {
+                    "name": "search",
+                    "args": {"query": "CDSM-42922"},
+                    "serverName": "wikijs",
+                },
+                "conversationId": "antigravity-run",
+            }
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(self.scripts / "antigravity.py"),
+                    "--root",
+                    str(root),
+                    "--event",
+                    "PreToolUse",
+                ],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+            )
+            audit = json.loads(
+                (root / ".agent-harness/audit/antigravity-run.jsonl").read_text()
+            )
+
+        self.assertEqual(self.decision(result, "antigravity"), "deny")
+        self.assertEqual(audit["mcp_server"], "wikijs")
 
     def test_malformed_policy_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -63,17 +63,18 @@ reviewed installation plan.
   conversation-wide authority.
 - Native sandbox and permission defaults where project-scoped settings exist.
 - One portable decision policy: reads inside allowed paths are allowed, writes
-  inside allowed paths ask, and deletions are denied.
+  inside allowed paths ask, deletions are denied, and MCP execution is limited
+  to the generated project allowlist.
 - A pre-tool hook that enforces denied paths, path scope, deletion rules, shell
-  denials, and conservative handling of unknown actions.
+  denials, MCP server scope, and conservative handling of unknown actions.
 - Redacted audit metadata keyed by the host's session/conversation identifier.
 - Native documentation MCP or documentation skill configuration.
 
 The portable configuration copied into every generated project is:
 
 - `config/persona.yaml` for identity, goal, language, and tone;
-- `config/policies.yaml` for action decisions, allowed paths, denied paths, shell
-  denials, and audit enablement;
+- `config/policies.yaml` for action decisions, allowed paths, denied paths, the
+  exact MCP execution allowlist, shell denials, and audit enablement;
 - `config/capabilities.yaml` for the selected discovery manifest.
 - `config/integrations.yaml` for selected optional external services.
 
@@ -81,8 +82,8 @@ The portable configuration copied into every generated project is:
 file only directs the selected host to that contract, while native settings and
 `scripts/guardrails/*.py` form the enforcement layer.
 
-The hook records hashes, host, event, run ID, turn ID, tool name, and outcome. It
-does not store prompt or argument content. Audit files live under
+The hook records hashes, host, event, run ID, turn ID, tool name, detected MCP server,
+and outcome. It does not store prompt or argument content. Audit files live under
 `.agent-harness/audit/` and are ignored by Git.
 
 The native translation is host-specific:
@@ -96,9 +97,16 @@ The native translation is host-specific:
 The policy file is JSON-compatible YAML so all three dependency-free hook
 bridges can read it with Python's standard library. Its strict parser rejects
 missing fields, unknown fields, invalid decisions, duplicate entries, and any
-attempt to weaken deletion from `deny`. Repository validation and generated
+attempt to weaken deletion from `deny`, use an MCP policy other than `allowlist`,
+or declare duplicate or invalid MCP server IDs. Repository validation and generated
 harness validation call that same parser; there is no separate policy schema
 with potentially different behavior.
+
+The initializer adds only selected remote integrations and the selected documentation
+MCP to `mcp.allowed_servers`. Globally configured host MCPs can remain visible, but the
+pre-tool bridge hard-denies their execution unless they are explicitly enabled for this
+harness. The required `manage-mcp-access` skill applies reviewed changes through
+`scripts/update_mcp_access.py` without modifying global host configuration.
 
 Plan approval and native tool approval are deliberately separate. The former is
 a semantic agreement about scope; the latter is enforced by the host before a

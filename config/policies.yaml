@@ -21,6 +21,10 @@
       "secrets/**"
     ]
   },
+  "mcp": {
+    "mode": "allowlist",
+    "allowed_servers": []
+  },
   "shell": {
     "denied_patterns": ["rm -rf /", "mkfs", ":(){ :|:& };:"]
   },

@@ -18,6 +18,7 @@ class PolicyTests(unittest.TestCase):
             {"allowed_read_paths", "allowed_write_paths", "denied_paths"},
         )
         self.assertNotIn("network", policy)
+        self.assertEqual(policy["mcp"], {"mode": "allowlist", "allowed_servers": []})
 
     def test_runtime_parser_rejects_unknown_or_missing_fields(self) -> None:
         source = Path(__file__).resolve().parent.parent

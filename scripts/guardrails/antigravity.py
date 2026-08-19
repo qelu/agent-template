@@ -28,6 +28,14 @@ def main() -> int:
         payload = read_payload()
         policy = load_policy(root)
         tool_call = payload.get("toolCall") if isinstance(payload.get("toolCall"), dict) else {}
+        mcp_server = next(
+            (
+                str(tool_call[key])
+                for key in ("serverName", "server_name", "server")
+                if isinstance(tool_call.get(key), str) and tool_call[key]
+            ),
+            None,
+        )
         event = HookEvent(
             host="antigravity",
             event=args.event,
@@ -35,6 +43,7 @@ def main() -> int:
             turn_id=str(payload["stepIdx"]) if payload.get("stepIdx") is not None else None,
             tool_name=str(tool_call["name"]) if tool_call.get("name") is not None else None,
             tool_input=tool_call.get("args") if isinstance(tool_call.get("args"), dict) else {},
+            mcp_server=mcp_server,
         )
         decision = evaluate_policy(event, policy, root)
         audit_event(root, event, decision, policy)

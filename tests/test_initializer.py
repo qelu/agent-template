@@ -25,6 +25,7 @@ class InitializerTests(unittest.TestCase):
             self.assertTrue((destination / ".codex" / "hooks.json").is_file())
             self.assertTrue((destination / "scripts" / "guardrails" / "codex.py").is_file())
             self.assertTrue((destination / "scripts" / "update_scope.py").is_file())
+            self.assertTrue((destination / "scripts" / "update_mcp_access.py").is_file())
             self.assertFalse((destination / "scripts" / "guardrails" / "__pycache__").exists())
             self.assertTrue((destination / ".git").is_dir())
             self.assertTrue((destination / ".agents" / "skills" / "task-planning").is_dir())
@@ -39,6 +40,8 @@ class InitializerTests(unittest.TestCase):
             self.assertEqual(config["approval_policy"], "on-request")
             self.assertEqual(config["sandbox_mode"], "read-only")
             self.assertIn("openaiDeveloperDocs", config["mcp_servers"])
+            policy = json.loads((destination / "config" / "policies.yaml").read_text())
+            self.assertEqual(policy["mcp"]["allowed_servers"], ["openaiDeveloperDocs"])
 
             hooks = json.loads((destination / ".codex" / "hooks.json").read_text())
             command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
@@ -130,6 +133,8 @@ class InitializerTests(unittest.TestCase):
                 mcp["mcpServers"]["geminiDocs"],
                 {"serverUrl": "https://gemini-api-docs-mcp.dev"},
             )
+            policy = json.loads((destination / "config/policies.yaml").read_text())
+            self.assertEqual(policy["mcp"]["allowed_servers"], ["geminiDocs"])
 
     def test_runtime_option_was_removed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -75,6 +75,7 @@ class InitializerCoreTests(unittest.TestCase):
                 "documentation-maintenance",
                 "import-external-skill",
                 "import-template-skills",
+                "manage-mcp-access",
                 "manage-project-scope",
                 "map-skill-command",
                 "safe-tool-use",
@@ -438,6 +439,8 @@ class InitializerCoreTests(unittest.TestCase):
                 )
                 self.assertIn(guidance, docs)
                 self.assertEqual(receipt["integrations"][0]["authentication"], "pending")
+                policy = json.loads((destination / "config/policies.yaml").read_text())
+                self.assertEqual(policy["mcp"]["allowed_servers"], ["atlassian-rovo"])
                 if host == "antigravity":
                     antigravity_config = json.loads(
                         (destination / ".agents/mcp_config.json").read_text()
@@ -655,6 +658,7 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertTrue((destination / "scripts" / "guardrails" / "claude_code.py").is_file())
             self.assertTrue((destination / ".claude" / "skills" / "task-planning").is_dir())
             self.assertTrue((destination / ".claude" / "skills" / "safe-tool-use").is_dir())
+            self.assertTrue((destination / ".claude" / "skills" / "manage-mcp-access").is_dir())
             self.assertTrue((destination / ".claude" / "skills" / "manage-project-scope").is_dir())
             self.assertTrue((destination / ".claude" / "skills" / "map-skill-command").is_dir())
             self.assertTrue((destination / ".claude" / "skills" / "skill-auditor").is_dir())
@@ -685,6 +689,7 @@ class InitializerCoreTests(unittest.TestCase):
                 {
                     "task-planning",
                     "safe-tool-use",
+                    "manage-mcp-access",
                     "manage-project-scope",
                     "map-skill-command",
                     "skill-auditor",

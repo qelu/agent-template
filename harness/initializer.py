@@ -654,6 +654,7 @@ def copy_host_native_template(source: Path, destination: Path, plan: Installatio
         "config/persona.yaml",
         "config/policies.yaml",
         "scripts/update_scope.py",
+        "scripts/update_mcp_access.py",
         "scripts/validate_harness.py",
         "templates/adr-template.md",
         "templates/runbook-template.md",
@@ -722,6 +723,25 @@ def copy_host_native_template(source: Path, destination: Path, plan: Installatio
         destination / "config" / "integrations.yaml",
         {"version": "1.0", "integrations": integration_manifest},
     )
+    configure_mcp_allowlist(destination, plan, integration_manifest)
+
+
+def configure_mcp_allowlist(
+    destination: Path,
+    plan: InstallationPlan,
+    integrations: list[dict[str, Any]],
+) -> None:
+    policy_path = destination / "config" / "policies.yaml"
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    allowed = {
+        str(integration["id"])
+        for integration in integrations
+        if integration["kind"] == "remote-mcp"
+    }
+    if plan.documentation_provider not in {"none", "anthropic"}:
+        allowed.add(str(DOCUMENTATION_SERVERS[plan.documentation_provider]["id"]))
+    policy["mcp"]["allowed_servers"] = sorted(allowed)
+    policy_path.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
 
 
 def select_capabilities(destination: Path, selected: set[str]) -> None:

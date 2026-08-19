@@ -62,6 +62,7 @@ fixtures covering:
 - allowed reads and confirmed writes inside configured scope;
 - denied paths and the invariant that deletion remains denied;
 - conservative handling of unknown tools and shell commands;
+- selected MCP calls reaching native approval and unselected global MCP calls being denied;
 - external side effects flowing through native confirmation;
 - prompt-context injection and host session or conversation ID normalization;
 - redacted, run-scoped audit metadata; and
