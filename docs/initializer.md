@@ -8,9 +8,16 @@ Antigravity already owns the model loop.
 uv run python scripts/initialize_agent.py
 ```
 
-Git and `uv` are the bootstrap requirements. The optional provisioning step uses
-`uv` to obtain the selected Python version and create a project-local `.venv`.
-The system Python is never replaced.
+Git, Python 3.11 or newer, `uv`, and Gitleaks are mandatory bootstrap
+requirements and must all be available on `PATH`. The initializer checks them
+before opening the wizard and makes no changes when the preflight fails. The
+optional provisioning step uses `uv` to obtain the selected Python version and
+create a project-local `.venv`; the system Python is never replaced. Host CLIs
+and integration-specific tools are validated only when their host or integration
+is selected. In particular, Antigravity with Atlassian Rovo requires `node` and
+`npx`; on Windows the initializer resolves `node.exe` and npm's `npx-cli.js` to
+absolute paths before creating the harness so desktop-app `PATH` differences do
+not break OAuth startup.
 
 ## Wizard flow
 

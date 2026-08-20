@@ -25,6 +25,8 @@ the project follows Semantic Versioning.
 
 ### Changed
 
+- Git, Python 3.11+, uv, and Gitleaks are now mandatory initializer prerequisites;
+  missing baseline tooling fails before the interactive wizard starts.
 - Antigravity 2.0 installations now preserve and back up the shared MCP configuration,
   atomically publish selected integrations for discovery, and refuse conflicting server
   definitions while retaining the generated per-harness execution allowlist.
@@ -39,6 +41,9 @@ the project follows Semantic Versioning.
 
 ### Fixed
 
+- Made Antigravity Rovo startup and OAuth bootstrap reliable on Windows by resolving
+  Node/npm executables before creation, bypassing `npx.cmd`, and safely replacing older
+  initializer-managed Rovo definitions in the shared MCP configuration.
 - Made initialization, host guardrails, generated hook commands, sensitive-file
   permissions, and their tests Windows-compatible; CI now validates Windows directly.
 - Prevented the interactive initializer from constructing all-disabled

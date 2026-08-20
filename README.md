@@ -133,7 +133,24 @@ The generated locations follow the hosts' published project conventions:
 
 ## Quick start
 
-Prerequisites are Git and [uv](https://docs.astral.sh/uv/):
+Install every mandatory prerequisite before launching the initializer:
+
+- [Git](https://git-scm.com/downloads), available as `git` on `PATH`.
+- [Python](https://www.python.org/downloads/) 3.11 or newer.
+- [uv](https://docs.astral.sh/uv/getting-started/installation/), available as `uv` on `PATH`.
+- [Gitleaks](https://github.com/gitleaks/gitleaks#installing), available as `gitleaks` on `PATH`.
+
+The initializer performs this preflight before opening the wizard and exits without
+creating or changing a harness if any prerequisite is missing. Verify them with:
+
+```bash
+git --version
+python --version
+uv --version
+gitleaks version
+```
+
+Then prepare and validate the template:
 
 ```bash
 git clone https://github.com/qelu/agent-template.git
