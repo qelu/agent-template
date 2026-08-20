@@ -148,26 +148,26 @@ class InitializerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             destination = root / "primed-agent"
-            client = root / "desktop-client.json"
+            client = root / "web-client.json"
             client.write_text(
                 json.dumps(
                     {
-                        "installed": {
+                        "web": {
                             "client_id": "test-client",
                             "client_secret": "test-secret",
                             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                             "token_uri": "https://oauth2.googleapis.com/token",
-                            "redirect_uris": ["http://localhost"],
+                            "redirect_uris": ["http://localhost:8000/oauth2callback"],
                         }
                     }
                 ),
                 encoding="utf-8",
             )
             client.chmod(0o600)
-            gws_config = root / "gws"
+            workspace_config = root / "workspace-config"
             result = self._initialize(
                 destination,
-                "codex",
+                "antigravity",
                 extra=(
                     "--docs-provider",
                     "none",
@@ -181,17 +181,17 @@ class InitializerTests(unittest.TestCase):
                     "gmail",
                     "--yes",
                 ),
-                env={"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(gws_config)},
+                env={"GOOGLE_WORKSPACE_MCP_CONFIG_DIR": str(workspace_config)},
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue((gws_config / "client_secret.json").is_file())
+            self.assertTrue((workspace_config / "client_secret.json").is_file())
             self.assertFalse(any(destination.rglob("client_secret.json")))
-            codex = (destination / ".codex/config.toml").read_text()
+            project_mcp = json.loads((destination / ".agents/mcp_config.json").read_text())
             docs = (destination / "docs/integrations.md").read_text()
-            self.assertIn("[mcp_servers.atlassian-rovo]", codex)
-            self.assertIn('auth = "oauth"', codex)
-            self.assertIn("gws auth login --readonly -s gmail", docs)
+            self.assertIn("atlassian-rovo", project_mcp["mcpServers"])
+            self.assertIn("google-workspace", project_mcp["mcpServers"])
+            self.assertIn("workspace-mcp==1.25.0", docs)
 
     def _initialize(
         self,

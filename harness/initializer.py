@@ -35,11 +35,15 @@ GOOGLE_WORKSPACE_SERVICES = (
     "docs",
     "sheets",
     "slides",
+    "forms",
     "tasks",
-    "people",
+    "contacts",
     "chat",
+    "appscript",
 )
 GOOGLE_WORKSPACE_DEFAULT_SERVICES = ("gmail", "drive", "calendar")
+GOOGLE_WORKSPACE_MCP_VERSION = "1.25.0"
+GOOGLE_WORKSPACE_REDIRECT_URI = "http://localhost:8000/oauth2callback"
 DEFAULT_DOCUMENTATION_PROVIDER = {
     "portable": "none",
     "codex": "openai",
@@ -313,7 +317,7 @@ def destination_error(source: Path, destination: Path) -> str | None:
 
 
 def google_workspace_client_error(path: Path) -> str | None:
-    """Return a safe validation error for a Google Desktop OAuth client file."""
+    """Return a safe validation error for a Google Desktop or Web OAuth client."""
     candidate = path.expanduser()
     if candidate.is_symlink() or not candidate.is_file():
         return "Google Workspace OAuth client must be an existing regular JSON file"
@@ -321,26 +325,38 @@ def google_workspace_client_error(path: Path) -> str | None:
         payload = json.loads(candidate.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return "Google Workspace OAuth client must contain valid UTF-8 JSON"
-    if not isinstance(payload, dict) or not isinstance(payload.get("installed"), dict):
-        return "Google Workspace OAuth client must be a Desktop client with an installed object"
-    installed = payload["installed"]
+    if not isinstance(payload, dict):
+        return "Google Workspace OAuth client must contain a JSON object"
+    client_kind = "installed" if isinstance(payload.get("installed"), dict) else "web"
+    client = payload.get(client_kind)
+    if not isinstance(client, dict):
+        return "Google Workspace OAuth client requires an installed or web object"
     required_strings = ("client_id", "client_secret", "auth_uri", "token_uri")
     if any(
-        not isinstance(installed.get(field), str) or not installed[field].strip()
+        not isinstance(client.get(field), str) or not client[field].strip()
         for field in required_strings
     ):
-        return "Google Workspace Desktop client is missing required OAuth fields"
-    redirect_uris = installed.get("redirect_uris")
+        return "Google Workspace OAuth client is missing required OAuth fields"
+    redirect_uris = client.get("redirect_uris")
     if not isinstance(redirect_uris, list) or not all(
         isinstance(uri, str) and uri for uri in redirect_uris
     ):
-        return "Google Workspace Desktop client requires redirect_uris"
+        return "Google Workspace OAuth client requires redirect_uris"
+    if client_kind == "web" and GOOGLE_WORKSPACE_REDIRECT_URI not in redirect_uris:
+        return (
+            "Google Workspace Web OAuth client must include the exact redirect URI "
+            + GOOGLE_WORKSPACE_REDIRECT_URI
+        )
     return None
 
 
 def google_workspace_config_dir() -> Path:
-    configured = os.environ.get("GOOGLE_WORKSPACE_CLI_CONFIG_DIR")
-    return Path(configured).expanduser() if configured else Path.home() / ".config" / "gws"
+    configured = os.environ.get("GOOGLE_WORKSPACE_MCP_CONFIG_DIR")
+    return (
+        Path(configured).expanduser()
+        if configured
+        else Path.home() / ".config" / "agent-harness" / "google-workspace"
+    )
 
 
 def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
@@ -421,15 +437,18 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
         google_workspace_client_source = (
             normalized.google_workspace_client.expanduser()
             if normalized.google_workspace_client is not None
-            else google_workspace_client_target
+            else None
         )
+        if google_workspace_client_source is None:
+            raise InitializerError(
+                "Google Workspace requires --google-workspace-client with an OAuth client JSON"
+            )
         if error := google_workspace_client_error(google_workspace_client_source):
             raise InitializerError(
-                f"{error}. Provide --google-workspace-client with a Desktop OAuth client JSON"
+                f"{error}. Provide --google-workspace-client with a Desktop or Web OAuth client JSON"
             )
         if (
             os.name == "posix"
-            and google_workspace_client_source.resolve() != google_workspace_client_target.resolve()
             and stat.S_IMODE(google_workspace_client_source.stat().st_mode) & 0o077
         ):
             raise InitializerError(
@@ -438,9 +457,10 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
             )
         if google_workspace_client_target.exists():
             if error := google_workspace_client_error(google_workspace_client_target):
-                raise InitializerError(f"Existing gws client configuration is unsafe: {error}")
+                raise InitializerError(f"Existing Workspace MCP OAuth client is unsafe: {error}")
             if (
-                google_workspace_client_source.resolve() != google_workspace_client_target.resolve()
+                google_workspace_client_source.resolve()
+                != google_workspace_client_target.resolve()
                 and google_workspace_client_source.read_bytes()
                 != google_workspace_client_target.read_bytes()
             ):
@@ -587,7 +607,7 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
         _run(["git", "init", "--quiet"], cwd=staging)
         if "pre-commit-secret-scan" in plan.capabilities:
             _run(["git", "config", "core.hooksPath", ".githooks"], cwd=staging)
-        configure_google_workspace_client(plan)
+        configure_google_workspace_mcp(plan)
         os.replace(staging, destination)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
@@ -595,40 +615,32 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
     return destination
 
 
-def configure_google_workspace_client(plan: InstallationPlan) -> None:
-    """Install a validated OAuth client in gws's user configuration without overwriting."""
+def configure_google_workspace_mcp(plan: InstallationPlan) -> None:
+    """Install the OAuth client in a user-only location without overwriting it."""
     source = plan.google_workspace_client_source
     target = plan.google_workspace_client_target
     if source is None or target is None:
         return
     if error := google_workspace_client_error(source):
         raise InitializerError(f"Google Workspace OAuth client changed after approval: {error}")
-    if target.parent.is_symlink():
-        raise InitializerError(f"Unsafe Google Workspace configuration directory: {target.parent}")
-    if target.is_symlink():
+    if target.parent.is_symlink() or target.is_symlink():
         raise InitializerError(f"Unsafe Google Workspace OAuth client target: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if target.parent.is_symlink() or not target.parent.is_dir():
+        raise InitializerError(f"Unsafe Google Workspace configuration directory: {target.parent}")
+    target.parent.chmod(0o700)
     if target.exists():
         if source.resolve() != target.resolve() and source.read_bytes() != target.read_bytes():
             raise InitializerError(
                 f"Refusing to overwrite a different Google Workspace OAuth client at {target}"
             )
-        target.parent.chmod(0o700)
         target.chmod(0o600)
         return
-    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if target.parent.is_symlink() or not target.parent.is_dir():
-        raise InitializerError(f"Unsafe Google Workspace configuration directory: {target.parent}")
-    target.parent.chmod(0o700)
     temporary: Path | None = None
     try:
-        with (
-            source.open("rb") as input_stream,
-            tempfile.NamedTemporaryFile(
-                dir=target.parent,
-                prefix=f".{target.name}.initializer-",
-                delete=False,
-            ) as output_stream,
-        ):
+        with source.open("rb") as input_stream, tempfile.NamedTemporaryFile(
+            dir=target.parent, prefix=f".{target.name}.initializer-", delete=False
+        ) as output_stream:
             temporary = Path(output_stream.name)
             shutil.copyfileobj(input_stream, output_stream)
         temporary.chmod(0o600)
@@ -656,6 +668,7 @@ def copy_host_native_template(source: Path, destination: Path, plan: Installatio
         "scripts/update_scope.py",
         "scripts/update_mcp_access.py",
         "scripts/mcp_legacy_stdio_compat.cjs",
+        "scripts/launch_google_workspace_mcp.py",
         "scripts/validate_harness.py",
         "templates/adr-template.md",
         "templates/runbook-template.md",
@@ -739,6 +752,8 @@ def configure_mcp_allowlist(
         for integration in integrations
         if integration["kind"] == "remote-mcp"
     }
+    if any(integration["id"] == "google-workspace" for integration in integrations):
+        allowed.add("google-workspace")
     if plan.documentation_provider not in {"none", "anthropic"}:
         allowed.add(str(DOCUMENTATION_SERVERS[plan.documentation_provider]["id"]))
     policy["mcp"]["allowed_servers"] = sorted(allowed)
@@ -919,6 +934,52 @@ def _add_remote_mcp(
     return path
 
 
+def _google_workspace_command(plan: InstallationPlan) -> tuple[str, list[str], dict[str, str]]:
+    target = plan.google_workspace_client_target
+    if target is None:
+        raise InitializerError("Google Workspace OAuth client target was not resolved")
+    level = "readonly" if plan.spec.google_workspace_readonly else "full"
+    launcher = plan.spec.destination / "scripts" / "launch_google_workspace_mcp.py"
+    args = [
+        str(launcher),
+        "--single-user",
+        "--tool-tier",
+        "core",
+        "--permissions",
+        *(f"{service}:{level}" for service in plan.spec.google_workspace_services),
+    ]
+    return "python3", args, {"GOOGLE_WORKSPACE_OAUTH_CLIENT_FILE": str(target)}
+
+
+def _add_google_workspace_mcp(destination: Path, plan: InstallationPlan) -> Path:
+    command, args, environment = _google_workspace_command(plan)
+    server_id = "google-workspace"
+    if plan.spec.host == "codex":
+        path = destination / ".codex" / "config.toml"
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(f"\n[mcp_servers.{server_id}]\n")
+            stream.write(f'command = {json.dumps(command)}\n')
+            stream.write("args = " + json.dumps(args) + "\n")
+            stream.write(
+                "env = { GOOGLE_WORKSPACE_OAUTH_CLIENT_FILE = "
+                + json.dumps(environment["GOOGLE_WORKSPACE_OAUTH_CLIENT_FILE"])
+                + " }\n"
+            )
+        return path
+    if plan.spec.host == "claude-code":
+        path = destination / ".mcp.json"
+    else:
+        path = destination / ".agents" / "mcp_config.json"
+    payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"mcpServers": {}}
+    payload.setdefault("mcpServers", {})[server_id] = {
+        "command": command,
+        "args": args,
+        "env": environment,
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 def write_integration_configuration(
     destination: Path, plan: InstallationPlan, source: Path
 ) -> None:
@@ -954,6 +1015,8 @@ def write_integration_configuration(
                     else None
                 ),
             )
+        elif integration["kind"] == "local-mcp" and integration_id == "google-workspace":
+            _add_google_workspace_mcp(destination, plan)
         lines.extend(
             (
                 f"## {integration_id}",
@@ -1019,14 +1082,14 @@ def _integration_setup_guidance(integration_id: str, plan: InstallationPlan) -> 
         }[plan.spec.host]
         return (*steps, "", "Authentication remains pending until that OAuth flow succeeds.", "")
     if integration_id == "google-workspace":
-        services = ",".join(plan.spec.google_workspace_services)
-        readonly = " --readonly" if plan.spec.google_workspace_readonly else ""
         target = plan.google_workspace_client_target
         return (
-            f"The validated Desktop OAuth client is installed at `{target}` with user-only permissions.",
-            "Google Workspace is CLI-backed; no MCP entry is generated.",
-            f"Run `gws auth login{readonly} -s {services}`, review the scopes, and complete browser consent.",
-            "Verify with `gws auth status` and a bounded read-only request before authorizing writes.",
+            f"The validated OAuth client is installed at `{target}` with user-only permissions.",
+            f"The project launches `workspace-mcp=={GOOGLE_WORKSPACE_MCP_VERSION}` locally over stdio.",
+            "The same MCP configuration format is generated for Codex, Claude Code, and Antigravity.",
+            "On the first Workspace tool call, complete the Google browser consent flow. Tokens "
+            "persist under the community server's user credential directory across conversations.",
+            "Verify with a bounded read request before enabling or approving writes.",
             "",
         )
     return ()
@@ -1129,6 +1192,7 @@ def write_receipt(
                 "google_workspace": {
                     "client_configured": True,
                     "client_target": str(plan.google_workspace_client_target),
+                    "mcp_package": f"workspace-mcp=={GOOGLE_WORKSPACE_MCP_VERSION}",
                     "services": list(plan.spec.google_workspace_services),
                     "readonly": plan.spec.google_workspace_readonly,
                     "authentication": "pending",

@@ -52,11 +52,11 @@ integrations:
 
   - id: google-workspace
     status: active
-    kind: official-cli
-    provider: Google Workspace open source
-    description: Install and prime the Google-maintained gws CLI with a user-supplied Desktop OAuth client for structured Workspace operations.
-    official_source: https://github.com/googleworkspace/cli
-    auth: provider-cli
+    kind: local-mcp
+    provider: Taylor Wilsdon community project
+    description: Run the pinned community Google Workspace MCP locally with a user-supplied OAuth client and explicit service permissions.
+    official_source: https://github.com/taylorwilsdon/google_workspace_mcp
+    auth: oauth
     hosts:
       - codex
       - claude-code
@@ -73,10 +73,6 @@ integrations:
     write_capable: true
     endpoint: null
     token_env: null
-    command: gws
-    install_command:
-      - npm
-      - install
-      - --global
-      - "@googleworkspace/cli@0.22.5"
+    command: uvx
+    install_command: null
     setup_commands: []

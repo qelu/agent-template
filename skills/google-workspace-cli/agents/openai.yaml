@@ -1,4 +1,0 @@
-interface:
-  display_name: "Google Workspace CLI"
-  short_description: "Operate Google Workspace through the gws CLI safely."
-  default_prompt: "Use $google-workspace-cli to inspect the relevant Google Workspace schema and perform this bounded operation safely."

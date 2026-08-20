@@ -30,7 +30,7 @@ INTEGRATION_FIELDS = {
     "setup_commands",
 }
 INTEGRATION_STATUSES = {"active", "experimental", "disabled"}
-INTEGRATION_KINDS = {"remote-mcp", "official-cli", "plugin"}
+INTEGRATION_KINDS = {"remote-mcp", "remote-mcp-suite", "local-mcp", "official-cli", "plugin"}
 INTEGRATION_AUTH = {"none", "oauth", "provider-cli", "token-env"}
 INTEGRATION_APPROVALS = {"prompt", "writes"}
 INTEGRATION_HOSTS = {"codex", "claude-code", "antigravity"}
@@ -129,6 +129,20 @@ def load_integrations(root: Path) -> list[dict[str, Any]]:
                 raise IntegrationError(
                     f"Remote MCP integration {integration_id} may not declare CLI installation"
                 )
+        elif integration["kind"] == "remote-mcp-suite":
+            if endpoint is not None or command is not None or install_command is not None:
+                raise IntegrationError(
+                    f"Remote MCP suite {integration_id} may not declare a single transport"
+                )
+            if integration["auth"] != "oauth":
+                raise IntegrationError(f"Remote MCP suite {integration_id} requires OAuth")
+        elif integration["kind"] == "local-mcp":
+            if endpoint is not None or install_command is not None:
+                raise IntegrationError(
+                    f"Local MCP integration {integration_id} may not declare endpoint or installation"
+                )
+            if not isinstance(command, str) or not command.strip():
+                raise IntegrationError(f"Local MCP integration {integration_id} requires command")
         elif integration["kind"] == "official-cli":
             if endpoint is not None or token_env is not None:
                 raise IntegrationError(
