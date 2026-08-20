@@ -22,6 +22,12 @@ child.stdout.pipe(process.stdout);
 child.stderr.pipe(process.stderr);
 
 const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+let childInputClosed = false;
+const closeChildInput = () => {
+  if (childInputClosed) return;
+  childInputClosed = true;
+  child.stdin.end();
+};
 input.on("line", (line) => {
   let message;
   try {
@@ -43,7 +49,10 @@ input.on("line", (line) => {
   }
   child.stdin.write(`${line}\n`);
 });
-input.on("close", () => child.stdin.end());
+input.on("close", closeChildInput);
+// On Windows, readline's close event can lag after a redirected parent stdin
+// reaches EOF. Forward the stream end directly so the MCP child can exit.
+process.stdin.on("end", closeChildInput);
 
 child.on("error", (error) => {
   process.stderr.write(`failed to start MCP bridge: ${error.message}\n`);
