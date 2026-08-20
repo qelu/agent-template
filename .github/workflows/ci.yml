@@ -40,7 +40,7 @@ jobs:
       - name: Install Gitleaks prerequisite
         shell: bash
         run: |
-          go install github.com/gitleaks/gitleaks/v8@v8.28.0
+          go install github.com/zricethezav/gitleaks/v8@v8.28.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Validate repository
         run: uv run python scripts/validate_repository.py
