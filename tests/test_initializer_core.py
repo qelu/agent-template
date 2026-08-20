@@ -130,8 +130,8 @@ class InitializerCoreTests(unittest.TestCase):
             ]
             self.assertEqual(
                 command,
-                "uv run --project . python scripts/guardrails/antigravity.py "
-                "--root . --event PreToolUse",
+                "uv run --project .. python ../scripts/guardrails/antigravity.py "
+                "--root .. --event PreToolUse",
             )
             self.assertNotIn(str(destination.resolve()).casefold(), command.casefold())
             self.assertNotIn('"', command)
