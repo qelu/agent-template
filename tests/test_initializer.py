@@ -136,6 +136,41 @@ class InitializerTests(unittest.TestCase):
             policy = json.loads((destination / "config/policies.yaml").read_text())
             self.assertEqual(policy["mcp"]["allowed_servers"], ["geminiDocs"])
 
+    @unittest.skipUnless(os.name == "nt", "Windows command execution regression test")
+    def test_antigravity_hook_runs_from_a_windows_path_with_spaces(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "projects AI" / "agent with spaces"
+            result = self._initialize(
+                destination,
+                "antigravity",
+                extra=("--docs-provider", "none"),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            hooks = json.loads((destination / ".agents" / "hooks.json").read_text())
+            command = hooks["agent-harness-guardrails"]["PreToolUse"][0]["hooks"][0][
+                "command"
+            ]
+            hook_result = subprocess.run(
+                command,
+                cwd=destination,
+                shell=True,
+                input=json.dumps(
+                    {
+                        "conversationId": "windows-space-regression",
+                        "stepIdx": 1,
+                        "toolCall": {
+                            "name": "read_file",
+                            "args": {"path": "README.md"},
+                        },
+                    }
+                ),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(hook_result.returncode, 0, hook_result.stderr)
+            self.assertEqual(json.loads(hook_result.stdout)["decision"], "allow")
+
     def test_runtime_option_was_removed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             result = self._initialize(

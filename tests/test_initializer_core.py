@@ -113,21 +113,28 @@ class InitializerCoreTests(unittest.TestCase):
             execute_plan(self.root, plan)
             self.assertTrue((destination / "config" / "persona.yaml").is_file())
 
-    def test_windows_hooks_use_portable_commands_with_the_final_root(self) -> None:
+    def test_windows_hooks_avoid_quoted_absolute_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary, patch(
             "harness.initializer.platform.system", return_value="Windows"
         ):
             destination = Path(temporary) / "agent with spaces"
             plan = resolve_plan(
                 self.root,
-                self.spec(destination, host="codex", documentation_provider="none"),
+                self.spec(destination, host="antigravity", documentation_provider="none"),
             )
             execute_plan(self.root, plan)
 
-            hooks = json.loads((destination / ".codex" / "hooks.json").read_text())
-            command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
-            self.assertIn("uv run --project", command)
-            self.assertIn(str(destination.resolve()).casefold(), command.casefold())
+            hooks = json.loads((destination / ".agents" / "hooks.json").read_text())
+            command = hooks["agent-harness-guardrails"]["PreToolUse"][0]["hooks"][0][
+                "command"
+            ]
+            self.assertEqual(
+                command,
+                "uv run --project . python scripts/guardrails/antigravity.py "
+                "--root . --event PreToolUse",
+            )
+            self.assertNotIn(str(destination.resolve()).casefold(), command.casefold())
+            self.assertNotIn('"', command)
             self.assertNotIn("$(git", command)
 
     def test_python_314_is_valid_installation_metadata(self) -> None:
