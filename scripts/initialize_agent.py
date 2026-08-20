@@ -29,7 +29,6 @@ from harness.initializer import (  # noqa: E402
     destination_error,
     execute_plan,
     google_workspace_client_error,
-    google_workspace_config_dir,
     integration_choices,
     load_initializer_config,
     resolve_plan,
@@ -126,7 +125,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--google-workspace-client",
         type=Path,
-        help="existing Google Desktop OAuth client JSON to install in the user gws configuration",
+        help="existing Google Desktop or Web OAuth client JSON for the community Workspace MCP",
     )
     result.add_argument(
         "--google-workspace-service",
@@ -138,7 +137,7 @@ def parser() -> argparse.ArgumentParser:
         "--google-workspace-readonly",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="request read-only Google Workspace scopes during the later login",
+        help="limit selected Google Workspace services to read-only scopes",
     )
     result.add_argument("--dry-run", action="store_true", help="resolve and print without changes")
     result.add_argument(
@@ -411,18 +410,17 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
     google_workspace_services = GOOGLE_WORKSPACE_DEFAULT_SERVICES
     google_workspace_readonly = True
     if "google-workspace" in selected_integrations:
-        existing_client = google_workspace_config_dir() / "client_secret.json"
         console.print("\n[bold cyan]Google Workspace authentication[/bold cyan]")
         console.print(
-            "Provide a Google Desktop OAuth client. It will be installed in the user gws "
-            "configuration and never copied into the generated project.",
+            "Provide a Google Desktop OAuth client, or a Web OAuth client containing the exact "
+            "redirect URI http://localhost:8000/oauth2callback. It is copied to a user-only "
+            "configuration directory and never into the generated project.",
             style="dim",
         )
         google_workspace_client = Path(
             _ask(
                 questionary.path(
-                    "Google Desktop OAuth client JSON",
-                    default=str(existing_client) if existing_client.is_file() else "",
+                    "Google OAuth client JSON",
                     validate=lambda value: google_workspace_client_error(Path(value)) or True,
                 )
             )
@@ -448,7 +446,7 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
         google_workspace_readonly = bool(
             _ask(
                 questionary.confirm(
-                    "Request read-only Google Workspace scopes?",
+                    "Limit Google Workspace to read-only operations?",
                     default=True,
                 )
             )
@@ -592,7 +590,7 @@ def plan_payload(plan: InstallationPlan) -> dict[str, object]:
                 "google_workspace_client_target": str(plan.google_workspace_client_target),
                 "google_workspace_services": list(plan.spec.google_workspace_services),
                 "google_workspace_readonly": plan.spec.google_workspace_readonly,
-                "google_workspace_login": "pending",
+                "google_workspace_authentication": f"pending in {plan.spec.host}",
             }
             if plan.google_workspace_client_target is not None
             else {}
@@ -665,6 +663,11 @@ def show_success(plan: InstallationPlan, *, no_color: bool) -> None:
             )
     if plan.integrations:
         next_steps.append("# Complete integration setup in docs/integrations.md")
+    if "google-workspace" in plan.integrations:
+        services = ", ".join(plan.spec.google_workspace_services)
+        next_steps.append(
+            "# Call a Google Workspace read tool and complete browser authentication: " + services
+        )
     console.print(
         Panel(
             "Harness created successfully.\n\n"

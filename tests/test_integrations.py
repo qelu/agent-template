@@ -97,20 +97,56 @@ class IntegrationCatalogTests(unittest.TestCase):
                         kind="official-cli",
                         auth="provider-cli",
                         endpoint=None,
-                        command="gws",
+                        command="acme",
                         install_command=[
                             "npm",
                             "install",
                             "--global",
-                            "@googleworkspace/cli@0.22.5",
+                            "@example/acme-cli@1.0.0",
                         ],
-                        setup_commands=["gws auth login -s drive"],
+                        setup_commands=["acme auth login"],
                     )
                 ],
             )
             integration = load_integrations(root)[0]
 
-        self.assertEqual(integration["command"], "gws")
+        self.assertEqual(integration["command"], "acme")
+
+    def test_remote_mcp_suite_requires_oauth_and_no_single_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_catalog(
+                root,
+                [
+                    self.integration(
+                        kind="remote-mcp-suite",
+                        endpoint=None,
+                        command=None,
+                        install_command=None,
+                    )
+                ],
+            )
+            integration = load_integrations(root)[0]
+
+        self.assertEqual(integration["kind"], "remote-mcp-suite")
+
+    def test_local_mcp_requires_command_without_endpoint_or_installer(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_catalog(
+                root,
+                [
+                    self.integration(
+                        kind="local-mcp",
+                        endpoint=None,
+                        command="uvx",
+                        install_command=None,
+                    )
+                ],
+            )
+            integration = load_integrations(root)[0]
+
+        self.assertEqual(integration["command"], "uvx")
 
     def test_token_auth_requires_environment_name(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

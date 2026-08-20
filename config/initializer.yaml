@@ -56,9 +56,8 @@ bundles:
     integrations:
       - github
   google-workspace:
-    description: Pinned gws CLI plus its operating skill and integration lifecycle guidance.
+    description: Pinned community Google Workspace MCP plus integration lifecycle guidance.
     capabilities:
-      - google-workspace-cli
       - integration-lifecycle
     integrations:
       - google-workspace

@@ -25,8 +25,8 @@ The following documented surfaces are public interfaces:
   bundle, and environment selections it controls;
 - installation receipt schema 2.0 in
   `config/schemas/installation.schema.json`;
-- secure Google Workspace Desktop OAuth-client import into the provider-designated
-  user configuration, including no-overwrite and user-only permission guarantees;
+- secure Google Workspace OAuth configuration for the pinned community stdio MCP on
+  Codex, Claude Code, and Antigravity, including user-only permission guarantees;
 - the generated `scripts/validate_harness.py` and `scripts/update_scope.py`
   command-line behavior documented in generated projects;
 - the native hook events generated for each supported host and the portable

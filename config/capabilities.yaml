@@ -118,10 +118,3 @@ capabilities:
     path: .githooks/pre-commit
     description: Scan staged changes with Gitleaks before Git creates a commit.
     when: Use when local commits should fail closed on detected hardcoded secrets.
-
-  - id: google-workspace-cli
-    type: skill
-    status: active
-    path: skills/google-workspace-cli
-    description: Operate Google Workspace through the structured gws CLI with bounded scopes and writes.
-    when: Use when reading or changing Gmail, Drive, Calendar, Docs, Sheets, Chat, or other Workspace data through gws.

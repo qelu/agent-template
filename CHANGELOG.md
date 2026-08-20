@@ -7,9 +7,9 @@ the project follows Semantic Versioning.
 
 ### Added
 
-- Added secure Google Workspace Desktop OAuth-client import, selectable service and
-  read-only scope guidance, user-level setup receipts, and exact Rovo authentication
-  instructions for Codex, Claude Code, and Antigravity 2.0.
+- Added secure Google Workspace OAuth configuration for the pinned community
+  `workspace-mcp` on Codex, Claude Code, and Antigravity, with selectable services,
+  read-only defaults, user-level secrets, and setup receipts.
 - Added separate optional integration and bundle catalogs, initializer flags and
   wizard selection, native remote-MCP configuration, setup guidance, receipts,
   validation, and trust-boundary documentation.
@@ -20,7 +20,7 @@ the project follows Semantic Versioning.
   runbooks, a fail-closed staged Gitleaks hook, and transparent governance,
   operations, and team-baseline bundles.
 - Added Atlassian Rovo and GitHub remote MCP adapters, a pinned Google Workspace
-  CLI adapter and operating skill, provider bundles, environment-token handling,
+  MCP adapter, provider bundles, environment-token handling,
   CLI preflight/installation plans, and generated setup guidance.
 
 ### Changed

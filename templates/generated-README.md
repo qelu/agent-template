@@ -30,8 +30,9 @@ Optional external services selected during initialization are listed in
 `config/integrations.yaml`. When the list is non-empty, follow
 `docs/integrations.md` to review scopes, authenticate through the host or provider,
 test a read-only operation, and confirm write prompts. The project contains no
-integration credentials. A selected Google Workspace Desktop OAuth client lives in the
-user-level `gws` configuration recorded in the installation receipt, never this project.
+integration credentials. A selected Google Workspace integration uses a pinned local MCP;
+its OAuth client lives in the private user path recorded in the installation receipt,
+never this project.
 
 An integration may use a remote MCP server or a provider-maintained CLI. CLI
 installation commands are recorded in the approved plan. Environment-variable names

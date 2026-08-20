@@ -225,7 +225,7 @@ def main() -> int:
             configured_ids.add(integration_id)
             if host not in integration["hosts"]:
                 errors.append(f"Integration {integration_id} does not support host {host}")
-            if integration["kind"] != "remote-mcp":
+            if integration["kind"] not in {"remote-mcp", "local-mcp"}:
                 if integration["kind"] == "official-cli" and not shutil.which(
                     str(integration["command"])
                 ):
@@ -245,7 +245,7 @@ def main() -> int:
             else:
                 configured = {}
             if integration_id not in configured:
-                errors.append(f"Remote MCP integration is not configured: {integration_id}")
+                errors.append(f"MCP integration is not configured: {integration_id}")
         receipt_ids = {
             str(item.get("id")) for item in receipt_integrations if isinstance(item, dict)
         }
@@ -256,6 +256,8 @@ def main() -> int:
             google_setup = setup.get("google_workspace", {}) if isinstance(setup, dict) else {}
             if not isinstance(google_setup, dict) or not google_setup.get("client_configured"):
                 errors.append("Google Workspace OAuth client setup is not recorded")
+            elif not google_setup.get("client_target") or not google_setup.get("services"):
+                errors.append("Google Workspace MCP target and services are not recorded")
             for credential_name in ("credentials.json", "client_secret.json"):
                 if any(ROOT.rglob(credential_name)):
                     errors.append(

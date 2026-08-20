@@ -57,12 +57,12 @@ class InitializerCoreTests(unittest.TestCase):
         path.write_text(
             json.dumps(
                 {
-                    "installed": {
+                    "web": {
                         "client_id": client_id,
                         "client_secret": "test-secret",
                         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                         "token_uri": "https://oauth2.googleapis.com/token",
-                        "redirect_uris": ["http://localhost"],
+                        "redirect_uris": ["http://localhost:8000/oauth2callback"],
                     }
                 }
             ),
@@ -599,79 +599,82 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertFalse(authenticated)
         run.assert_not_called()
 
-    def test_google_workspace_plans_pinned_cli_install_when_missing(self) -> None:
-        def find(command: str) -> str | None:
-            return None if command in {"gws", "codex"} else f"/tools/{command}"
+    def test_google_workspace_is_available_for_all_native_hosts(self) -> None:
+        for host in ("codex", "claude-code", "antigravity"):
+            with self.subTest(host=host), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                client = self.google_client(root)
+                with patch.dict(
+                    os.environ,
+                    {"GOOGLE_WORKSPACE_MCP_CONFIG_DIR": str(root / "workspace-config")},
+                ):
+                    plan = resolve_plan(
+                        self.root,
+                        self.spec(
+                            root / "agent",
+                            host=host,
+                            documentation_provider="none",
+                            capabilities=(),
+                            bundles=("google-workspace",),
+                            google_workspace_client=client,
+                        ),
+                    )
+                self.assertEqual(plan.external_commands, ())
+                self.assertEqual(plan.integrations, ("google-workspace",))
 
-        with (
-            tempfile.TemporaryDirectory() as temporary,
-            patch("harness.initializer.shutil.which", side_effect=find),
-            patch.dict(
-                os.environ,
-                {"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(Path(temporary) / "gws")},
-            ),
+    def test_google_workspace_bundle_generates_pinned_local_mcp_without_project_secrets(self) -> None:
+        for host, config_path in (
+            ("codex", Path(".codex/config.toml")),
+            ("claude-code", Path(".mcp.json")),
+            ("antigravity", Path(".agents/mcp_config.json")),
         ):
-            client = self.google_client(Path(temporary))
-            plan = resolve_plan(
-                self.root,
-                self.spec(
-                    Path(temporary) / "agent",
-                    host="codex",
-                    capabilities=(),
-                    bundles=("google-workspace",),
-                    google_workspace_client=client,
-                ),
-            )
+            with self.subTest(host=host), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                client = self.google_client(root)
+                destination = root / "agent"
+                config_dir = root / "workspace-config"
+                with patch.dict(
+                    os.environ,
+                    {"GOOGLE_WORKSPACE_MCP_CONFIG_DIR": str(config_dir)},
+                ):
+                    plan = resolve_plan(
+                        self.root,
+                        self.spec(
+                            destination,
+                            host=host,
+                            documentation_provider="none",
+                            capabilities=(),
+                            bundles=("google-workspace",),
+                            google_workspace_client=client,
+                        ),
+                    )
+                    execute_plan(self.root, plan)
+                docs = (destination / "docs/integrations.md").read_text()
+                receipt = yaml.safe_load(
+                    (destination / ".agent-harness/installation.yaml").read_text()
+                )
+                config_text = (destination / config_path).read_text()
+                installed_client = config_dir / "client_secret.json"
+                policy = json.loads((destination / "config/policies.yaml").read_text())
 
-        self.assertIn(
-            (
-                "npm",
-                "install",
-                "--global",
-                "@googleworkspace/cli@0.22.5",
-            ),
-            plan.external_commands,
-        )
-        self.assertIn("google-workspace-cli", plan.capabilities)
-        self.assertEqual(plan.integrations, ("google-workspace",))
-
-    def test_google_workspace_bundle_packages_cli_skill_and_setup(self) -> None:
-        with (
-            tempfile.TemporaryDirectory() as temporary,
-            patch(
-                "harness.initializer.shutil.which", side_effect=lambda command: f"/tools/{command}"
-            ),
-            patch.dict(
-                os.environ,
-                {"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(Path(temporary) / "gws")},
-            ),
-        ):
-            client = self.google_client(Path(temporary))
-            destination = Path(temporary) / "agent"
-            plan = resolve_plan(
-                self.root,
-                self.spec(
-                    destination,
-                    host="codex",
-                    capabilities=(),
-                    bundles=("google-workspace",),
-                    google_workspace_client=client,
-                ),
-            )
-            execute_plan(self.root, plan)
-            skill = destination / ".agents/skills/google-workspace-cli"
-            docs = (destination / "docs/integrations.md").read_text()
-            installed_client = Path(temporary) / "gws/client_secret.json"
-            receipt = yaml.safe_load((destination / ".agent-harness/installation.yaml").read_text())
-
-            self.assertTrue((skill / "SKILL.md").is_file())
-            self.assertTrue((skill / "references/setup.md").is_file())
-            self.assertIn("gws auth login --readonly -s gmail,drive,calendar", docs)
-            self.assertIn("Google Workspace is CLI-backed; no MCP entry is generated", docs)
-            self.assertEqual(stat.S_IMODE(installed_client.stat().st_mode), 0o600)
-            self.assertEqual(stat.S_IMODE(installed_client.parent.stat().st_mode), 0o700)
-            self.assertFalse(any(destination.rglob("client_secret.json")))
-            self.assertTrue(receipt["integration_setup"]["google_workspace"]["client_configured"])
+                self.assertIn("workspace-mcp==1.25.0", docs)
+                self.assertIn("google-workspace", config_text)
+                self.assertIn("gmail:readonly", config_text)
+                self.assertIn("workspace-mcp==1.25.0", (destination / "scripts/launch_google_workspace_mcp.py").read_text())
+                self.assertEqual(stat.S_IMODE(installed_client.stat().st_mode), 0o600)
+                self.assertEqual(stat.S_IMODE(installed_client.parent.stat().st_mode), 0o700)
+                self.assertFalse(any(destination.rglob("client_secret.json")))
+                generated_text = "\n".join(
+                    path.read_text(errors="ignore")
+                    for path in destination.rglob("*")
+                    if path.is_file()
+                )
+                self.assertNotIn("test-secret", generated_text)
+                self.assertEqual(policy["mcp"]["allowed_servers"], ["google-workspace"])
+                self.assertEqual(
+                    receipt["integration_setup"]["google_workspace"]["mcp_package"],
+                    "workspace-mcp==1.25.0",
+                )
 
     def test_google_workspace_rejects_a_token_as_the_oauth_client(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -681,28 +684,43 @@ class InitializerCoreTests(unittest.TestCase):
                 json.dumps({"refresh_token": "secret", "client_id": "client"}),
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(InitializerError, "Desktop client"):
+            with self.assertRaisesRegex(InitializerError, "installed or web"):
                 resolve_plan(
                     self.root,
                     self.spec(
                         root / "agent",
-                        host="codex",
+                        host="antigravity",
+                        documentation_provider="none",
                         capabilities=(),
                         bundles=("google-workspace",),
                         google_workspace_client=token,
                     ),
                 )
 
+    def test_google_workspace_web_client_requires_local_callback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            client = self.google_client(root)
+            payload = json.loads(client.read_text())
+            payload["web"]["redirect_uris"] = ["http://localhost:8000/auth/callback"]
+            client.write_text(json.dumps(payload))
+            with self.assertRaisesRegex(InitializerError, "localhost:8000/oauth2callback"):
+                resolve_plan(
+                    self.root,
+                    self.spec(
+                        root / "agent",
+                        host="antigravity",
+                        documentation_provider="none",
+                        capabilities=(),
+                        bundles=("google-workspace",),
+                        google_workspace_client=client,
+                    ),
+                )
+
     def test_google_workspace_rejects_a_broadly_readable_oauth_client(self) -> None:
         if os.name != "posix":
             self.skipTest("POSIX file modes are required")
-        with (
-            tempfile.TemporaryDirectory() as temporary,
-            patch.dict(
-                os.environ,
-                {"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(Path(temporary) / "gws")},
-            ),
-        ):
+        with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             client = self.google_client(root)
             client.chmod(0o644)
@@ -711,7 +729,8 @@ class InitializerCoreTests(unittest.TestCase):
                     self.root,
                     self.spec(
                         root / "agent",
-                        host="codex",
+                        host="antigravity",
+                        documentation_provider="none",
                         capabilities=(),
                         bundles=("google-workspace",),
                         google_workspace_client=client,
@@ -719,24 +738,22 @@ class InitializerCoreTests(unittest.TestCase):
                 )
 
     def test_google_workspace_refuses_to_overwrite_a_different_client(self) -> None:
-        with (
-            tempfile.TemporaryDirectory() as temporary,
-            patch.dict(
-                os.environ,
-                {"GOOGLE_WORKSPACE_CLI_CONFIG_DIR": str(Path(temporary) / "gws")},
-            ),
-        ):
+        with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            config = root / "gws"
+            config = root / "workspace-config"
             config.mkdir()
             self.google_client(config, client_id="existing").replace(config / "client_secret.json")
             replacement = self.google_client(root, client_id="replacement")
-            with self.assertRaisesRegex(InitializerError, "refusing to overwrite"):
+            with (
+                patch.dict(os.environ, {"GOOGLE_WORKSPACE_MCP_CONFIG_DIR": str(config)}),
+                self.assertRaisesRegex(InitializerError, "refusing to overwrite"),
+            ):
                 resolve_plan(
                     self.root,
                     self.spec(
                         root / "agent",
-                        host="codex",
+                        host="antigravity",
+                        documentation_provider="none",
                         capabilities=(),
                         bundles=("google-workspace",),
                         google_workspace_client=replacement,

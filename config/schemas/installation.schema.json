@@ -42,7 +42,7 @@
         "required": ["id", "kind", "authentication"],
         "properties": {
           "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
-          "kind": {"enum": ["remote-mcp", "official-cli", "plugin"]},
+          "kind": {"enum": ["remote-mcp", "remote-mcp-suite", "local-mcp", "official-cli", "plugin"]},
           "authentication": {"enum": ["pending", "not-required", "verified"]}
         },
         "additionalProperties": false
@@ -105,6 +105,7 @@
           "required": [
             "client_configured",
             "client_target",
+            "mcp_package",
             "services",
             "readonly",
             "authentication"
@@ -112,6 +113,7 @@
           "properties": {
             "client_configured": {"const": true},
             "client_target": {"type": "string", "minLength": 1},
+            "mcp_package": {"type": "string", "minLength": 1},
             "services": {
               "type": "array",
               "minItems": 1,
