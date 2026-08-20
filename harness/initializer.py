@@ -44,6 +44,7 @@ GOOGLE_WORKSPACE_SERVICES = (
 GOOGLE_WORKSPACE_DEFAULT_SERVICES = ("gmail", "drive", "calendar")
 GOOGLE_WORKSPACE_MCP_VERSION = "1.25.0"
 GOOGLE_WORKSPACE_REDIRECT_URI = "http://localhost:8000/oauth2callback"
+ANTIGRAVITY_MCP_CONFIG_ENV = "ANTIGRAVITY_MCP_CONFIG_FILE"
 DEFAULT_DOCUMENTATION_PROVIDER = {
     "portable": "none",
     "codex": "openai",
@@ -571,6 +572,7 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
             )
     if error := destination_error(source, destination):
         raise InitializerError(error)
+    destination_existed = destination.exists()
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(
         tempfile.mkdtemp(prefix=f".{destination.name}.initializer-", dir=destination.parent)
@@ -590,7 +592,12 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
                 PROJECT_NAME_PLACEHOLDER: plan.spec.agent_id,
             },
         )
-        write_host_profile(staging, plan.spec.host, plan.documentation_provider)
+        write_host_profile(
+            staging,
+            plan.spec.host,
+            plan.documentation_provider,
+            hook_root=destination,
+        )
         write_integration_configuration(staging, plan, source)
         write_receipt(staging, plan, source=source, validation="pending")
         if plan.spec.install_dependencies:
@@ -608,7 +615,29 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
         if "pre-commit-secret-scan" in plan.capabilities:
             _run(["git", "config", "core.hooksPath", ".githooks"], cwd=staging)
         configure_google_workspace_mcp(plan)
-        os.replace(staging, destination)
+        placeholder_removed = False
+        if destination_existed:
+            try:
+                destination.rmdir()
+            except OSError as exc:
+                raise InitializerError(
+                    f"Destination changed while the harness was being prepared: {destination}"
+                ) from exc
+            placeholder_removed = True
+        try:
+            os.replace(staging, destination)
+            placeholder_removed = False
+        except Exception:
+            if placeholder_removed and not destination.exists():
+                destination.mkdir(parents=True, exist_ok=True)
+            raise
+        try:
+            configure_antigravity_mcp(plan)
+        except Exception:
+            shutil.rmtree(destination, ignore_errors=True)
+            if destination_existed:
+                destination.mkdir(parents=True, exist_ok=True)
+            raise
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
@@ -628,13 +657,13 @@ def configure_google_workspace_mcp(plan: InstallationPlan) -> None:
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if target.parent.is_symlink() or not target.parent.is_dir():
         raise InitializerError(f"Unsafe Google Workspace configuration directory: {target.parent}")
-    target.parent.chmod(0o700)
+    _restrict_private_path(target.parent, directory=True)
     if target.exists():
         if source.resolve() != target.resolve() and source.read_bytes() != target.read_bytes():
             raise InitializerError(
                 f"Refusing to overwrite a different Google Workspace OAuth client at {target}"
             )
-        target.chmod(0o600)
+        _restrict_private_path(target)
         return
     temporary: Path | None = None
     try:
@@ -643,12 +672,42 @@ def configure_google_workspace_mcp(plan: InstallationPlan) -> None:
         ) as output_stream:
             temporary = Path(output_stream.name)
             shutil.copyfileobj(input_stream, output_stream)
-        temporary.chmod(0o600)
+        _restrict_private_path(temporary)
         os.replace(temporary, target)
     except Exception:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
         raise
+
+
+def _restrict_private_path(path: Path, *, directory: bool = False) -> None:
+    """Restrict sensitive configuration to the current user on the host OS."""
+    if os.name == "posix":
+        path.chmod(0o700 if directory else 0o600)
+        return
+    if platform.system() != "Windows":
+        path.chmod(0o700 if directory else 0o600)
+        return
+    try:
+        identity = subprocess.run(
+            ["whoami"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if not identity:
+            raise InitializerError("Windows returned an empty current-user identity")
+        permissions = f"{identity}:(OI)(CI)F" if directory else f"{identity}:F"
+        subprocess.run(
+            ["icacls", str(path), "/inheritance:r", "/grant:r", permissions],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise InitializerError(
+            f"Could not restrict sensitive configuration to the current Windows user: {path}"
+        ) from exc
 
 
 def _copy_file(source: Path, destination: Path, relative: str) -> None:
@@ -778,20 +837,56 @@ def select_capabilities(destination: Path, selected: set[str]) -> None:
     write_yaml(registry_path, registry)
 
 
-def _hook_command(host: str, event: str | None = None) -> str:
+def _hook_command(
+    host: str,
+    event: str | None = None,
+    *,
+    root: Path | None = None,
+) -> str:
     script = host.replace("-", "_")
     event_argument = f" --event {event}" if event else ""
+    if platform.system() == "Windows":
+        if root is None:
+            raise InitializerError("Windows hook commands require the final harness path")
+        command = [
+            "uv",
+            "run",
+            "--project",
+            str(root),
+            "python",
+            str(root / "scripts" / "guardrails" / f"{script}.py"),
+            "--root",
+            str(root),
+        ]
+        if event:
+            command.extend(("--event", event))
+        return subprocess.list2cmdline(command)
     return (
         f'python3 "$(git rev-parse --show-toplevel)/scripts/guardrails/{script}.py" '
         f'--root "$(git rev-parse --show-toplevel)"{event_argument}'
     )
 
 
-def _hook_handler(host: str, event: str | None = None) -> dict[str, object]:
-    return {"type": "command", "command": _hook_command(host, event), "timeout": 10}
+def _hook_handler(
+    host: str,
+    event: str | None = None,
+    *,
+    root: Path | None = None,
+) -> dict[str, object]:
+    return {
+        "type": "command",
+        "command": _hook_command(host, event, root=root),
+        "timeout": 10,
+    }
 
 
-def write_host_profile(destination: Path, host: str, provider: str) -> None:
+def write_host_profile(
+    destination: Path,
+    host: str,
+    provider: str,
+    *,
+    hook_root: Path | None = None,
+) -> None:
     instruction = (
         "# Agent Instructions\n\nRead and follow `agent/AGENT.md` as the canonical contract.\n"
     )
@@ -815,8 +910,10 @@ def write_host_profile(destination: Path, host: str, provider: str) -> None:
         hooks = {
             "description": "Project guardrails and run-aware audit metadata.",
             "hooks": {
-                "UserPromptSubmit": [{"hooks": [_hook_handler(host)]}],
-                "PreToolUse": [{"matcher": "*", "hooks": [_hook_handler(host)]}],
+                "UserPromptSubmit": [{"hooks": [_hook_handler(host, root=hook_root)]}],
+                "PreToolUse": [
+                    {"matcher": "*", "hooks": [_hook_handler(host, root=hook_root)]}
+                ],
             },
         }
         (codex / "hooks.json").write_text(json.dumps(hooks, indent=2) + "\n", encoding="utf-8")
@@ -841,8 +938,10 @@ def write_host_profile(destination: Path, host: str, provider: str) -> None:
                 ],
             },
             "hooks": {
-                "UserPromptSubmit": [{"hooks": [_hook_handler(host)]}],
-                "PreToolUse": [{"matcher": "*", "hooks": [_hook_handler(host)]}],
+                "UserPromptSubmit": [{"hooks": [_hook_handler(host, root=hook_root)]}],
+                "PreToolUse": [
+                    {"matcher": "*", "hooks": [_hook_handler(host, root=hook_root)]}
+                ],
             },
         }
         (claude / "settings.json").write_text(
@@ -853,8 +952,15 @@ def write_host_profile(destination: Path, host: str, provider: str) -> None:
         agents.mkdir(exist_ok=True)
         hooks = {
             "agent-harness-guardrails": {
-                "PreInvocation": [_hook_handler(host, "PreInvocation")],
-                "PreToolUse": [{"matcher": "*", "hooks": [_hook_handler(host, "PreToolUse")]}],
+                "PreInvocation": [
+                    _hook_handler(host, "PreInvocation", root=hook_root)
+                ],
+                "PreToolUse": [
+                    {
+                        "matcher": "*",
+                        "hooks": [_hook_handler(host, "PreToolUse", root=hook_root)],
+                    }
+                ],
             }
         }
         (agents / "hooks.json").write_text(json.dumps(hooks, indent=2) + "\n", encoding="utf-8")
@@ -980,6 +1086,97 @@ def _add_google_workspace_mcp(destination: Path, plan: InstallationPlan) -> Path
     return path
 
 
+def antigravity_mcp_config_path() -> Path:
+    """Return Antigravity 2.0's shared MCP configuration path."""
+    configured = os.environ.get(ANTIGRAVITY_MCP_CONFIG_ENV)
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".gemini" / "config" / "mcp_config.json"
+
+
+def configure_antigravity_mcp(plan: InstallationPlan) -> Path | None:
+    """Publish selected MCP definitions where Antigravity 2.0 discovers them."""
+    if plan.spec.host != "antigravity" or not plan.integrations:
+        return None
+
+    project_config = plan.spec.destination / ".agents" / "mcp_config.json"
+    if not project_config.is_file() or project_config.is_symlink():
+        raise InitializerError(f"Missing safe Antigravity project MCP config: {project_config}")
+    project_payload = json.loads(project_config.read_text(encoding="utf-8"))
+    project_servers = project_payload.get("mcpServers")
+    if not isinstance(project_servers, dict):
+        raise InitializerError("Antigravity project MCP config has invalid mcpServers")
+    missing = sorted(set(plan.integrations) - set(project_servers))
+    if missing:
+        raise InitializerError(
+            "Antigravity project MCP config is missing selected integrations: "
+            + ", ".join(missing)
+        )
+
+    target = antigravity_mcp_config_path()
+    if target.is_symlink() or target.parent.is_symlink():
+        raise InitializerError(f"Unsafe Antigravity MCP config target: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    _restrict_private_path(target.parent, directory=True)
+    if target.exists() and not target.is_file():
+        raise InitializerError(f"Antigravity MCP config is not a regular file: {target}")
+    payload = (
+        json.loads(target.read_text(encoding="utf-8"))
+        if target.exists()
+        else {"mcpServers": {}}
+    )
+    servers = payload.get("mcpServers")
+    if not isinstance(servers, dict):
+        raise InitializerError("Antigravity shared MCP config has invalid mcpServers")
+
+    conflicts = sorted(
+        integration_id
+        for integration_id in plan.integrations
+        if integration_id in servers
+        and servers[integration_id] != project_servers[integration_id]
+    )
+    if conflicts:
+        raise InitializerError(
+            "Antigravity shared MCP config contains different definitions for: "
+            + ", ".join(conflicts)
+            + ". Remove the older harness configuration before retrying"
+        )
+    for integration_id in plan.integrations:
+        servers[integration_id] = project_servers[integration_id]
+
+    backup: Path | None = None
+    if target.exists():
+        backup = target.with_name(
+            f"{target.name}.backup-before-{plan.spec.agent_id}-installation"
+        )
+        if backup.is_symlink():
+            raise InitializerError(f"Unsafe Antigravity MCP backup target: {backup}")
+        shutil.copy2(target, backup)
+        _restrict_private_path(backup)
+
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=target.parent,
+            prefix=f".{target.name}.initializer-",
+            delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            json.dump(payload, stream, indent=2)
+            stream.write("\n")
+        _restrict_private_path(temporary)
+        os.replace(temporary, target)
+    except Exception:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        if backup is not None and backup.exists() and not target.exists():
+            os.replace(backup, target)
+        raise
+    return target
+
+
 def write_integration_configuration(
     destination: Path, plan: InstallationPlan, source: Path
 ) -> None:
@@ -1072,7 +1269,8 @@ def _integration_setup_guidance(integration_id: str, plan: InstallationPlan) -> 
                 "Start Claude Code, run `/mcp`, select `atlassian-rovo`, and complete OAuth.",
             ),
             "antigravity": (
-                "Rovo is already configured in `.agents/mcp_config.json`.",
+                "Rovo is recorded in `.agents/mcp_config.json` and merged into Antigravity 2.0's shared MCP configuration for discovery.",
+                "The generated project allowlist remains authoritative for which shared MCP servers this harness may use.",
                 "Antigravity launches a persistent `mcp-remote` bridge so Atlassian OAuth can use its trusted localhost callback.",
                 "A project-local compatibility shim lets Antigravity's `server/discover` probe fall back to Atlassian's required `initialize` handshake.",
                 "Interactive initialization offers to complete the one-time OAuth bootstrap immediately.",
@@ -1086,7 +1284,7 @@ def _integration_setup_guidance(integration_id: str, plan: InstallationPlan) -> 
         return (
             f"The validated OAuth client is installed at `{target}` with user-only permissions.",
             f"The project launches `workspace-mcp=={GOOGLE_WORKSPACE_MCP_VERSION}` locally over stdio.",
-            "The same MCP configuration format is generated for Codex, Claude Code, and Antigravity.",
+            "Codex and Claude use project MCP configuration; Antigravity also receives an atomic shared-config merge because Antigravity 2.0 discovers MCPs globally.",
             "On the first Workspace tool call, complete the Google browser consent flow. Tokens "
             "persist under the community server's user credential directory across conversations.",
             "Verify with a bounded read request before enabling or approving writes.",

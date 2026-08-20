@@ -41,12 +41,15 @@ class GenericCatalogTests(unittest.TestCase):
         hook = self.root / ".githooks/pre-commit"
         text = hook.read_text(encoding="utf-8")
 
-        self.assertTrue(hook.stat().st_mode & 0o100)
+        if os.name == "posix":
+            self.assertTrue(hook.stat().st_mode & 0o100)
         self.assertIn("command -v gitleaks", text)
         self.assertIn(
             "gitleaks git --pre-commit --redact --staged --verbose",
             text,
         )
+        if os.name != "posix":
+            return
         environment = {**os.environ, "PATH": "/usr/bin:/bin"}
         result = subprocess.run(
             [str(hook)],

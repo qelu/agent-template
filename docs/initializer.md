@@ -262,7 +262,7 @@ browser authentication on the first tool call. The `atlassian-work`,
 | Claude Code | Optional explicit installation using the official npm package. |
 | Antigravity CLI | Detected as `agy`; use Google's official installer when absent. The initializer does not pipe a remote script into a shell. |
 | Provider SDKs | Never installed. |
-| Provider integrations | Remote and local MCP configuration is project-local; Google Workspace launches a pinned package through a generated secret-safe wrapper. |
+| Provider integrations | Codex and Claude use project-local MCP configuration. Antigravity 2.0 receives both a project manifest and a safe merge of selected integrations into `~/.gemini/config/mcp_config.json`, while the project allowlist controls use. Google Workspace launches a pinned package through a generated secret-safe wrapper. |
 | Credentials | Never written to the generated project. The Google OAuth source must have mode `0600` and is copied to a user-only configuration directory. |
 
 ## Transaction and validation
@@ -275,7 +275,8 @@ Generation occurs in a temporary sibling directory. The initializer:
 4. replaces identity placeholders and writes a pending receipt;
 5. optionally provisions the `.venv` and runs the harness validator and Ruff;
 6. runs Gitleaks when selected, whether or not Python provisioning was selected;
-7. atomically publishes the destination only after success.
+7. atomically publishes the destination only after success;
+8. for Antigravity 2.0, backs up and atomically merges only the selected integrations into its shared MCP discovery file, refusing conflicting definitions.
 
 Failure removes the staging directory and leaves a new destination absent or a
 supplied empty destination unchanged.
