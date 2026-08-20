@@ -41,6 +41,8 @@ the project follows Semantic Versioning.
 
 ### Fixed
 
+- Made generated Windows guardrail hook commands workspace-relative so
+  Antigravity can run harnesses from directories whose names contain spaces.
 - Made Antigravity Rovo startup and OAuth bootstrap reliable on Windows by resolving
   Node/npm executables before creation, bypassing `npx.cmd`, and safely replacing older
   initializer-managed Rovo definitions in the shared MCP configuration.

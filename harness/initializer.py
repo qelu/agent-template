@@ -876,17 +876,19 @@ def _hook_command(
     script = host.replace("-", "_")
     event_argument = f" --event {event}" if event else ""
     if platform.system() == "Windows":
-        if root is None:
-            raise InitializerError("Windows hook commands require the final harness path")
+        # Antigravity's Windows hook runner does not consistently apply cmd.exe
+        # quoting rules.  In particular, quotes added around absolute project
+        # paths can reach uv as literal characters.  Project hooks run from the
+        # harness root, so keep every path relative and avoid quoting entirely.
         command = [
             "uv",
             "run",
             "--project",
-            str(root),
+            ".",
             "python",
-            str(root / "scripts" / "guardrails" / f"{script}.py"),
+            f"scripts/guardrails/{script}.py",
             "--root",
-            str(root),
+            ".",
         ]
         if event:
             command.extend(("--event", event))
