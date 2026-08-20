@@ -124,7 +124,7 @@ class InitializerCoreTests(unittest.TestCase):
             hooks = json.loads((destination / ".codex" / "hooks.json").read_text())
             command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
             self.assertIn("uv run --project", command)
-            self.assertIn(str(destination), command)
+            self.assertIn(str(destination.resolve()).casefold(), command.casefold())
             self.assertNotIn("$(git", command)
 
     def test_python_314_is_valid_installation_metadata(self) -> None:
@@ -214,6 +214,7 @@ class InitializerCoreTests(unittest.TestCase):
                 "questionary.confirm",
                 side_effect=lambda message, **kwargs: prompt("confirm", message, **kwargs),
             ),
+            patch("rich.console.Console"),
             patch("scripts.initialize_agent._ask", side_effect=answer),
             patch("scripts.initialize_agent.shutil.which", return_value=None),
         ):
@@ -583,6 +584,8 @@ class InitializerCoreTests(unittest.TestCase):
             )
             execute_plan(self.root, plan)
             with (
+                patch("questionary.confirm", return_value=object()),
+                patch("rich.console.Console"),
                 patch("scripts.initialize_agent._ask", return_value=True),
                 patch("scripts.initialize_agent.shutil.which", return_value="/tools/npx"),
                 patch("scripts.initialize_agent.subprocess.run") as run,
