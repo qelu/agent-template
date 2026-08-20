@@ -878,17 +878,18 @@ def _hook_command(
     if platform.system() == "Windows" and host == "antigravity":
         # Antigravity's Windows hook runner does not consistently apply cmd.exe
         # quoting rules.  In particular, quotes added around absolute project
-        # paths can reach uv as literal characters.  Project hooks run from the
-        # harness root, so keep every path relative and avoid quoting entirely.
+        # paths can reach uv as literal characters.  Antigravity runs project
+        # hooks from the .agents directory, so resolve the harness through its
+        # parent and keep every path relative to avoid quoting entirely.
         command = [
             "uv",
             "run",
             "--project",
-            ".",
+            "..",
             "python",
-            f"scripts/guardrails/{script}.py",
+            f"../scripts/guardrails/{script}.py",
             "--root",
-            ".",
+            "..",
         ]
         if event:
             command.extend(("--event", event))

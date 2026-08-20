@@ -41,6 +41,8 @@ the project follows Semantic Versioning.
 
 ### Fixed
 
+- Resolved Antigravity's Windows project hooks relative to its actual `.agents`
+  working directory instead of incorrectly assuming the harness root.
 - Made generated Windows guardrail hook commands workspace-relative so
   Antigravity can run harnesses from directories whose names contain spaces.
 - Made Antigravity Rovo startup and OAuth bootstrap reliable on Windows by resolving

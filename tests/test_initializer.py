@@ -153,7 +153,7 @@ class InitializerTests(unittest.TestCase):
             ]
             hook_result = subprocess.run(
                 command,
-                cwd=destination,
+                cwd=destination / ".agents",
                 shell=True,
                 input=json.dumps(
                     {
