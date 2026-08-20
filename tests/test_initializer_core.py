@@ -16,6 +16,7 @@ from harness.initializer import (
     GOOGLE_WORKSPACE_DEFAULT_SERVICES,
     InitializationSpec,
     InitializerError,
+    antigravity_rovo_runtime,
     capability_choices,
     destination_error,
     execute_plan,
@@ -29,6 +30,8 @@ from scripts.initialize_agent import (
     ATLASSIAN_ROVO_ENDPOINT,
     bootstrap_atlassian_rovo,
     host_cli_unavailable_message,
+    main as initialize_main,
+    require_initializer_prerequisites,
     wizard_spec,
 )
 
@@ -535,13 +538,14 @@ class InitializerCoreTests(unittest.TestCase):
                 policy = json.loads((destination / "config/policies.yaml").read_text())
                 self.assertEqual(policy["mcp"]["allowed_servers"], ["atlassian-rovo"])
                 if host == "antigravity":
+                    node, npx_command = antigravity_rovo_runtime()
                     antigravity_config = json.loads(
                         (destination / ".agents/mcp_config.json").read_text()
                     )
                     self.assertEqual(
                         antigravity_config["mcpServers"]["atlassian-rovo"],
                         {
-                            "command": "node",
+                            "command": node,
                             "args": [
                                 str(
                                     plan.spec.destination
@@ -549,7 +553,7 @@ class InitializerCoreTests(unittest.TestCase):
                                     / "mcp_legacy_stdio_compat.cjs"
                                 ),
                                 "--",
-                                "npx",
+                                *npx_command,
                                 "-y",
                                 "mcp-remote@latest",
                                 "https://mcp.atlassian.com/v1/mcp/authv2",
@@ -569,6 +573,88 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertIn('auth = "oauth"', codex_config)
         self.assertIn("required = false", codex_config)
 
+    def test_windows_rovo_runtime_bypasses_the_npx_cmd_shim(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            node_root = Path(temporary)
+            node = node_root / "node.exe"
+            npx = node_root / "npx.cmd"
+            npx_cli = node_root / "node_modules" / "npm" / "bin" / "npx-cli.js"
+            npx_cli.parent.mkdir(parents=True)
+            for path in (node, npx, npx_cli):
+                path.write_text("", encoding="utf-8")
+
+            def find(command: str) -> str | None:
+                return {"node": str(node), "npx": str(npx)}.get(command)
+
+            with (
+                patch("harness.initializer.platform.system", return_value="Windows"),
+                patch("harness.initializer.shutil.which", side_effect=find),
+            ):
+                outer_node, inner_command = antigravity_rovo_runtime()
+
+        self.assertEqual(outer_node, str(node))
+        self.assertEqual(inner_command, (str(node), str(npx_cli)))
+        self.assertNotIn(str(npx), inner_command)
+
+    def test_antigravity_rovo_requires_node_and_npx_before_creation(self) -> None:
+        def find(command: str) -> str | None:
+            return None if command == "npx" else f"/tools/{command}"
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("harness.initializer.shutil.which", side_effect=find),
+            self.assertRaisesRegex(InitializerError, "requires Node.js commands.*npx"),
+        ):
+            resolve_plan(
+                self.root,
+                self.spec(
+                    Path(temporary) / "agent",
+                    host="antigravity",
+                    documentation_provider="none",
+                    integrations=("atlassian-rovo",),
+                ),
+            )
+
+    def test_antigravity_replaces_a_previous_managed_rovo_definition(self) -> None:
+        previous = {
+            "command": "node",
+            "args": [
+                "/old-harness/scripts/mcp_legacy_stdio_compat.cjs",
+                "--",
+                "npx",
+                "-y",
+                "mcp-remote@latest",
+                ATLASSIAN_ROVO_ENDPOINT,
+            ],
+        }
+        self.antigravity_config.write_text(
+            json.dumps({"mcpServers": {"atlassian-rovo": previous}}),
+            encoding="utf-8",
+        )
+        destination = Path(self.antigravity_state.name) / "replacement-agent"
+        plan = resolve_plan(
+            self.root,
+            self.spec(
+                destination,
+                host="antigravity",
+                documentation_provider="none",
+                capabilities=(),
+                integrations=("atlassian-rovo",),
+            ),
+        )
+
+        execute_plan(self.root, plan)
+
+        shared = json.loads(self.antigravity_config.read_text(encoding="utf-8"))
+        replacement = shared["mcpServers"]["atlassian-rovo"]
+        self.assertNotEqual(replacement, previous)
+        self.assertEqual(
+            replacement,
+            json.loads((destination / ".agents/mcp_config.json").read_text())["mcpServers"][
+                "atlassian-rovo"
+            ],
+        )
+
     def test_antigravity_interactive_init_bootstraps_atlassian_oauth(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "antigravity"
@@ -587,7 +673,10 @@ class InitializerCoreTests(unittest.TestCase):
                 patch("questionary.confirm", return_value=object()),
                 patch("rich.console.Console"),
                 patch("scripts.initialize_agent._ask", return_value=True),
-                patch("scripts.initialize_agent.shutil.which", return_value="/tools/npx"),
+                patch(
+                    "scripts.initialize_agent.antigravity_rovo_runtime",
+                    return_value=("/tools/node", ("/tools/npx",)),
+                ),
                 patch("scripts.initialize_agent.subprocess.run") as run,
             ):
                 authenticated = bootstrap_atlassian_rovo(
@@ -600,7 +689,7 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertTrue(authenticated)
         run.assert_called_once_with(
             [
-                "npx",
+                "/tools/npx",
                 "-p",
                 "mcp-remote@latest",
                 "mcp-remote-client",
@@ -872,20 +961,19 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertIn("shell's PATH", message)
         self.assertIn("desktop app may still be installed", message)
 
-    def test_missing_gitleaks_plans_homebrew_install_on_macos(self) -> None:
+    def test_missing_gitleaks_is_a_hard_prerequisite(self) -> None:
         def find(command: str) -> str | None:
             return None if command == "gitleaks" else f"/tools/{command}"
 
         with (
             tempfile.TemporaryDirectory() as temporary,
-            patch("harness.initializer.platform.system", return_value="Darwin"),
             patch("harness.initializer.shutil.which", side_effect=find),
+            self.assertRaisesRegex(InitializerError, "prerequisites: gitleaks"),
         ):
-            plan = resolve_plan(
+            resolve_plan(
                 self.root,
-                self.spec(Path(temporary) / "agent", security_tools=True),
+                self.spec(Path(temporary) / "agent"),
             )
-        self.assertIn(("brew", "install", "gitleaks"), plan.external_commands)
 
     def test_execution_generates_only_host_native_harness(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1025,25 +1113,33 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertTrue((destination / "knowledge/runbooks/incident-response.md").is_file())
             self.assertTrue((destination / "knowledge/runbooks/integration-lifecycle.md").is_file())
 
-    def test_secret_hook_plans_gitleaks_install_when_missing_on_macos(self) -> None:
+    def test_entrypoint_preflight_reports_all_missing_commands(self) -> None:
         def find(command: str) -> str | None:
-            return None if command in {"gitleaks", "codex"} else f"/tools/{command}"
+            return "/tools/git" if command == "git" else None
 
         with (
-            tempfile.TemporaryDirectory() as temporary,
-            patch("harness.initializer.platform.system", return_value="Darwin"),
-            patch("harness.initializer.shutil.which", side_effect=find),
+            patch("scripts.initialize_agent.shutil.which", side_effect=find),
+            self.assertRaisesRegex(
+                InitializerError,
+                "commands on PATH: uv, gitleaks",
+            ),
         ):
-            plan = resolve_plan(
-                self.root,
-                self.spec(
-                    Path(temporary) / "agent",
-                    host="codex",
-                    capabilities=("pre-commit-secret-scan",),
-                ),
-            )
+            require_initializer_prerequisites()
 
-        self.assertIn(("brew", "install", "gitleaks"), plan.external_commands)
+    def test_entrypoint_preflight_stops_before_the_wizard(self) -> None:
+        with (
+            patch("scripts.initialize_agent.parser") as parser_factory,
+            patch(
+                "scripts.initialize_agent.require_initializer_prerequisites",
+                side_effect=InitializerError("missing prerequisites"),
+            ),
+            patch("scripts.initialize_agent.wizard_spec") as wizard,
+            self.assertRaisesRegex(InitializerError, "missing prerequisites"),
+        ):
+            parser_factory.return_value.parse_args.return_value = object()
+            initialize_main()
+
+        wizard.assert_not_called()
 
     def test_capability_removal_cannot_escape_or_delete_project_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

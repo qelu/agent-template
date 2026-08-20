@@ -45,6 +45,8 @@ GOOGLE_WORKSPACE_DEFAULT_SERVICES = ("gmail", "drive", "calendar")
 GOOGLE_WORKSPACE_MCP_VERSION = "1.25.0"
 GOOGLE_WORKSPACE_REDIRECT_URI = "http://localhost:8000/oauth2callback"
 ANTIGRAVITY_MCP_CONFIG_ENV = "ANTIGRAVITY_MCP_CONFIG_FILE"
+BASELINE_PREREQUISITES = ("git", "uv", "gitleaks")
+ATLASSIAN_ROVO_ENDPOINT = "https://mcp.atlassian.com/v1/mcp/authv2"
 DEFAULT_DOCUMENTATION_PROVIDER = {
     "portable": "none",
     "codex": "openai",
@@ -179,6 +181,33 @@ def slug(value: str) -> str:
     if not candidate:
         raise InitializerError("Agent ID must contain at least one letter or digit")
     return candidate
+
+
+def antigravity_rovo_runtime() -> tuple[str, tuple[str, ...]]:
+    """Resolve an Antigravity-safe Node/npx command without relying on GUI PATH."""
+    node = shutil.which("node")
+    npx = shutil.which("npx")
+    missing = [name for name, path in (("node", node), ("npx", npx)) if path is None]
+    if missing:
+        raise InitializerError(
+            "Antigravity Atlassian Rovo requires Node.js commands on PATH: "
+            + ", ".join(missing)
+        )
+    assert node is not None and npx is not None
+    if platform.system() != "Windows":
+        return node, (npx,)
+
+    candidates = (
+        Path(npx).parent / "node_modules" / "npm" / "bin" / "npx-cli.js",
+        Path(node).parent / "node_modules" / "npm" / "bin" / "npx-cli.js",
+    )
+    npx_cli = next((candidate for candidate in candidates if candidate.is_file()), None)
+    if npx_cli is None:
+        raise InitializerError(
+            "Antigravity Atlassian Rovo found node and npx, but could not locate npm's "
+            "npx-cli.js. Reinstall the current Node.js LTS release and retry"
+        )
+    return node, (node, str(npx_cli))
 
 
 def _load_source_capabilities(source: Path) -> list[dict[str, Any]]:
@@ -473,13 +502,13 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
         raise InitializerError(
             "--google-workspace-client requires the google-workspace integration"
         )
-    tools_to_check = ["git", "uv"]
+    tools_to_check = list(BASELINE_PREREQUISITES)
     host_command = HOST_COMMANDS.get(host)
     if host_command:
         tools_to_check.append(host_command[0])
-    secret_scan_hook = "pre-commit-secret-scan" in selected
-    if normalized.security_tools or secret_scan_hook:
-        tools_to_check.append("gitleaks")
+    antigravity_rovo = host == "antigravity" and "atlassian-rovo" in selected_integrations
+    if antigravity_rovo:
+        tools_to_check.extend(("node", "npx"))
     selected_cli_integrations = [
         active_integrations[integration_id]
         for integration_id in selected_integrations
@@ -491,22 +520,15 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
     )
     status_by_command = {status.command: status for status in statuses}
     external_commands: list[tuple[str, ...]] = []
-    if normalized.install_dependencies and not status_by_command["uv"].available:
-        raise InitializerError("uv is required for --install; install uv and rerun")
-    if (normalized.security_tools or secret_scan_hook) and not status_by_command[
-        "gitleaks"
-    ].available:
-        if platform.system() == "Darwin" and shutil.which("brew"):
-            external_commands.append(("brew", "install", "gitleaks"))
-        else:
-            suffix = (
-                "and select it again" if secret_scan_hook else "and rerun with --security-tools"
-            )
-            raise InitializerError(
-                "Gitleaks is not installed. Install it from https://github.com/gitleaks/gitleaks "
-                + suffix
-                + "."
-            )
+    missing_prerequisites = [
+        command for command in BASELINE_PREREQUISITES if not status_by_command[command].available
+    ]
+    if missing_prerequisites:
+        raise InitializerError(
+            "Missing required initializer prerequisites: " + ", ".join(missing_prerequisites)
+        )
+    if antigravity_rovo:
+        antigravity_rovo_runtime()
     for integration in selected_cli_integrations:
         cli_command = str(integration["command"])
         if status_by_command[cli_command].available:
@@ -550,6 +572,14 @@ def execute_plan(source: Path, plan: InstallationPlan) -> Path:
     destination = plan.spec.destination
     if error := destination_error(source, destination):
         raise InitializerError(error)
+    missing_prerequisites = [
+        command for command in BASELINE_PREREQUISITES if not shutil.which(command)
+    ]
+    if missing_prerequisites:
+        raise InitializerError(
+            "Required initializer prerequisites disappeared from PATH: "
+            + ", ".join(missing_prerequisites)
+        )
     for command in plan.external_commands:
         _run(list(command), cwd=source)
     if plan.spec.install_host_tool:
@@ -1020,21 +1050,21 @@ def _add_remote_mcp(
         payload = (
             json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"mcpServers": {}}
         )
-        server = (
-            {
-                "command": "node",
+        if antigravity_local_bridge:
+            node, npx_command = antigravity_rovo_runtime()
+            server = {
+                "command": node,
                 "args": [
                     str(antigravity_bridge_script),
                     "--",
-                    "npx",
+                    *npx_command,
                     "-y",
                     "mcp-remote@latest",
                     url,
                 ],
             }
-            if antigravity_local_bridge
-            else {"serverUrl": url}
-        )
+        else:
+            server = {"serverUrl": url}
         payload.setdefault("mcpServers", {})[server_id] = server
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path
@@ -1094,6 +1124,24 @@ def antigravity_mcp_config_path() -> Path:
     return Path.home() / ".gemini" / "config" / "mcp_config.json"
 
 
+def _managed_antigravity_rovo_server(value: object) -> bool:
+    """Recognize a Rovo bridge previously generated by this initializer."""
+    if not isinstance(value, dict) or not isinstance(value.get("args"), list):
+        return False
+    command = value.get("command")
+    args = value["args"]
+    if not isinstance(command, str) or not all(isinstance(item, str) for item in args):
+        return False
+    return (
+        Path(command).name.lower() in {"node", "node.exe"}
+        and len(args) >= 6
+        and Path(args[0]).name == "mcp_legacy_stdio_compat.cjs"
+        and args[1] == "--"
+        and "mcp-remote@latest" in args
+        and args[-1] == ATLASSIAN_ROVO_ENDPOINT
+    )
+
+
 def configure_antigravity_mcp(plan: InstallationPlan) -> Path | None:
     """Publish selected MCP definitions where Antigravity 2.0 discovers them."""
     if plan.spec.host != "antigravity" or not plan.integrations:
@@ -1134,6 +1182,10 @@ def configure_antigravity_mcp(plan: InstallationPlan) -> Path | None:
         for integration_id in plan.integrations
         if integration_id in servers
         and servers[integration_id] != project_servers[integration_id]
+        and not (
+            integration_id == "atlassian-rovo"
+            and _managed_antigravity_rovo_server(servers[integration_id])
+        )
     )
     if conflicts:
         raise InitializerError(
@@ -1271,6 +1323,7 @@ def _integration_setup_guidance(integration_id: str, plan: InstallationPlan) -> 
             "antigravity": (
                 "Rovo is recorded in `.agents/mcp_config.json` and merged into Antigravity 2.0's shared MCP configuration for discovery.",
                 "The generated project allowlist remains authoritative for which shared MCP servers this harness may use.",
+                "Node.js and npx are resolved before creation; Windows uses absolute node.exe and npx-cli.js paths so GUI PATH differences cannot block startup.",
                 "Antigravity launches a persistent `mcp-remote` bridge so Atlassian OAuth can use its trusted localhost callback.",
                 "A project-local compatibility shim lets Antigravity's `server/discover` probe fall back to Atlassian's required `initialize` handshake.",
                 "Interactive initialization offers to complete the one-time OAuth bootstrap immediately.",

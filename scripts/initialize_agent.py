@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from harness.initializer import (  # noqa: E402
+    BASELINE_PREREQUISITES,
     DEFAULT_DOCUMENTATION_PROVIDER,
     DOCUMENTATION_PROVIDERS,
     GOOGLE_WORKSPACE_DEFAULT_SERVICES,
@@ -25,6 +26,7 @@ from harness.initializer import (  # noqa: E402
     InitializationSpec,
     InstallationPlan,
     InitializerError,
+    antigravity_rovo_runtime,
     capability_choices,
     destination_error,
     execute_plan,
@@ -65,6 +67,28 @@ HOST_CLI_NAMES = {
 }
 
 ATLASSIAN_ROVO_ENDPOINT = "https://mcp.atlassian.com/v1/mcp/authv2"
+MINIMUM_PYTHON = (3, 11)
+
+
+def require_initializer_prerequisites() -> None:
+    """Fail before the wizard when mandatory local tooling is unavailable."""
+    problems: list[str] = []
+    if sys.version_info[:2] < MINIMUM_PYTHON:
+        problems.append(
+            f"Python {MINIMUM_PYTHON[0]}.{MINIMUM_PYTHON[1]} or newer "
+            f"(running {sys.version_info.major}.{sys.version_info.minor})"
+        )
+    missing_commands = [
+        command for command in BASELINE_PREREQUISITES if shutil.which(command) is None
+    ]
+    if missing_commands:
+        problems.append("commands on PATH: " + ", ".join(missing_commands))
+    if problems:
+        raise InitializerError(
+            "Missing required initializer prerequisites: "
+            + "; ".join(problems)
+            + ". Install every prerequisite listed in README.md, then retry."
+        )
 
 
 def host_cli_unavailable_message(host: str, binary: str) -> str:
@@ -479,29 +503,12 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
             default=defaults["development_tools"],
         )
     )
-    gitleaks_available = shutil.which("gitleaks") is not None
-    brew_can_install_gitleaks = sys.platform == "darwin" and shutil.which("brew") is not None
-    if gitleaks_available:
-        security_tools = _ask(
-            questionary.confirm(
-                "Scan the generated files for committed secrets with Gitleaks?",
-                default=defaults["security_tools"],
-            )
+    security_tools = _ask(
+        questionary.confirm(
+            "Scan the generated files for committed secrets with Gitleaks?",
+            default=defaults["security_tools"],
         )
-    elif brew_can_install_gitleaks:
-        security_tools = _ask(
-            questionary.confirm(
-                "Gitleaks is missing. Install it with Homebrew, then scan for secrets?",
-                default=False,
-            )
-        )
-    else:
-        security_tools = False
-        console.print(
-            "Gitleaks scan unavailable: `gitleaks` is not on PATH. Install it from "
-            "https://github.com/gitleaks/gitleaks and rerun the wizard to enable secret scanning.",
-            style="yellow",
-        )
+    )
     install_host_tool = False
     host_binary = {"codex": "codex", "claude-code": "claude", "antigravity": "agy"}.get(host)
     if host_binary:
@@ -712,24 +719,17 @@ def bootstrap_atlassian_rovo(plan: InstallationPlan, *, interactive: bool, no_co
             style="yellow",
         )
         return False
-    if not shutil.which("npx"):
-        console.print(
-            "Cannot start Atlassian authentication because `npx` is not available. Install "
-            "Node.js, then follow docs/integrations.md.",
-            style="yellow",
-        )
-        return False
-
-    command = [
-        "npx",
-        "-p",
-        "mcp-remote@latest",
-        "mcp-remote-client",
-        ATLASSIAN_ROVO_ENDPOINT,
-    ]
     try:
+        _, npx_command = antigravity_rovo_runtime()
+        command = [
+            *npx_command,
+            "-p",
+            "mcp-remote@latest",
+            "mcp-remote-client",
+            ATLASSIAN_ROVO_ENDPOINT,
+        ]
         subprocess.run(command, cwd=plan.spec.destination, check=True)
-    except (OSError, subprocess.CalledProcessError) as exc:
+    except (InitializerError, OSError, subprocess.CalledProcessError) as exc:
         console.print(
             "The harness was created, but Atlassian authentication did not complete. "
             f"Retry the command documented in docs/integrations.md. ({exc})",
@@ -749,6 +749,7 @@ def bootstrap_atlassian_rovo(plan: InstallationPlan, *, interactive: bool, no_co
 
 def main() -> int:
     args = parser().parse_args()
+    require_initializer_prerequisites()
     interactive = args.wizard or args.destination is None
     if interactive and not sys.stdin.isatty():
         raise InitializerError("The wizard requires an interactive terminal")
