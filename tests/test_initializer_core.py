@@ -137,6 +137,22 @@ class InitializerCoreTests(unittest.TestCase):
             self.assertNotIn('"', command)
             self.assertNotIn("$(git", command)
 
+    def test_windows_codex_hooks_keep_the_root_for_nested_working_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, patch(
+            "harness.initializer.platform.system", return_value="Windows"
+        ):
+            destination = Path(temporary) / "agent with spaces"
+            plan = resolve_plan(
+                self.root,
+                self.spec(destination, host="codex", documentation_provider="none"),
+            )
+            execute_plan(self.root, plan)
+
+            hooks = json.loads((destination / ".codex" / "hooks.json").read_text())
+            command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+            self.assertIn(str(destination.resolve()).casefold(), command.casefold())
+            self.assertIn('"', command)
+
     def test_python_314_is_valid_installation_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "agent"
