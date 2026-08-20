@@ -25,6 +25,9 @@ the project follows Semantic Versioning.
 
 ### Changed
 
+- Antigravity 2.0 installations now preserve and back up the shared MCP configuration,
+  atomically publish selected integrations for discovery, and refuse conflicting server
+  definitions while retaining the generated per-harness execution allowlist.
 - Aligned source, initializer, generated-project, contribution, release, and
   security documentation with the v1.0 host-native implementation.
 - Clarified the project's primary audience and documented the end-to-end path
@@ -36,6 +39,8 @@ the project follows Semantic Versioning.
 
 ### Fixed
 
+- Made initialization, host guardrails, generated hook commands, sensitive-file
+  permissions, and their tests Windows-compatible; CI now validates Windows directly.
 - Prevented the interactive initializer from constructing all-disabled
   Questionary checkboxes when bundles cover every capability or integration,
   and hide bundles whose integrations do not support the selected host.

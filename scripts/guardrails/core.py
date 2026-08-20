@@ -5,6 +5,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import json
+import os
 import re
 import shlex
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname
 
 
 ACTIONS = {"read", "write", "delete", "external_side_effect", "unknown"}
@@ -22,6 +24,7 @@ MCP_KEYS = {"mode", "allowed_servers"}
 SHELL_KEYS = {"denied_patterns"}
 AUDIT_KEYS = {"enabled"}
 MCP_SERVER = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$")
+WINDOWS_ABSOLUTE_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
 
 READ_TOOLS = {
     "cat",
@@ -103,8 +106,10 @@ READ_COMMANDS = {
     "sed",
     "stat",
     "tail",
+    "type",
     "wc",
     "which",
+    "get-content",
 }
 READ_ONLY_GIT_SUBCOMMANDS = {"branch", "diff", "log", "rev-parse", "show", "status"}
 
@@ -306,7 +311,7 @@ def _classify_command(command: str) -> str:
     if WRITE_COMMAND.search(command):
         return "write"
     try:
-        parts = shlex.split(command)
+        parts = _shell_split(command)
     except ValueError:
         return "unknown"
     if not parts:
@@ -344,10 +349,17 @@ def _path_denial(action: str, values: list[str], scope: dict[str, Any], root: Pa
 
 
 def _filesystem_path(value: str, root: Path) -> Path | None:
-    parsed = urlparse(value)
-    if parsed.scheme and parsed.scheme != "file":
-        return None
-    raw = unquote(parsed.path) if parsed.scheme == "file" else value
+    if WINDOWS_ABSOLUTE_PATH.match(value):
+        raw = value
+    else:
+        parsed = urlparse(value)
+        if parsed.scheme and parsed.scheme != "file":
+            return None
+        if parsed.scheme == "file":
+            uri_path = f"//{parsed.netloc}{parsed.path}" if parsed.netloc else parsed.path
+            raw = url2pathname(unquote(uri_path))
+        else:
+            raw = value
     path = Path(raw).expanduser()
     return (path if path.is_absolute() else root / path).resolve()
 
@@ -416,15 +428,27 @@ def _path_values(value: object, key: str = "") -> list[str]:
 
 def _command_paths(command: str) -> list[str]:
     try:
-        parts = shlex.split(command)
+        parts = _shell_split(command)
     except ValueError:
         return []
     values: list[str] = []
     for value in parts[1:]:
         candidate = value.split("=", 1)[-1] if value.startswith("of=") else value
-        if candidate.startswith(("/", "./", "../", "~/", "file://")):
+        if candidate.startswith(("/", "./", "../", "~/", "file://")) or (
+            WINDOWS_ABSOLUTE_PATH.match(candidate)
+        ):
             values.append(candidate)
     return values
+
+
+def _shell_split(command: str) -> list[str]:
+    parts = shlex.split(command, posix=os.name != "nt")
+    if os.name == "nt":
+        return [
+            part[1:-1] if len(part) >= 2 and part[0] == part[-1] == '"' else part
+            for part in parts
+        ]
+    return parts
 
 
 def _contains_delete_directive(value: object) -> bool:

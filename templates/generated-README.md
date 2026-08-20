@@ -33,6 +33,9 @@ test a read-only operation, and confirm write prompts. The project contains no
 integration credentials. A selected Google Workspace integration uses a pinned local MCP;
 its OAuth client lives in the private user path recorded in the installation receipt,
 never this project.
+For Antigravity 2.0, selected integrations are also published to its shared MCP discovery
+configuration. The project policy allowlist remains the authority for which of those
+globally visible servers this harness may invoke.
 
 An integration may use a remote MCP server or a provider-maintained CLI. CLI
 installation commands are recorded in the approved plan. Environment-variable names

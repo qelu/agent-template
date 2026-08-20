@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -134,6 +135,19 @@ class HostGuardrailTests(unittest.TestCase):
             unknown = self.invoke(root, "claude_code", "Bash", {"command": "custom-tool"})
             self.assertEqual(self.decision(outside, "claude_code"), "deny")
             self.assertEqual(self.decision(unknown, "claude_code"), "ask")
+
+    @unittest.skipUnless(os.name == "nt", "Windows path parsing regression")
+    def test_windows_shell_paths_are_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self.root(temporary)
+            outside = root.parent / "outside.txt"
+            result = self.invoke(
+                root,
+                "claude_code",
+                "Bash",
+                {"command": f'type "{outside}"'},
+            )
+            self.assertEqual(self.decision(result, "claude_code"), "deny")
 
     def test_common_delete_apis_are_denied_but_documentation_content_is_not(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

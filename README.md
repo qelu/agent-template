@@ -271,6 +271,11 @@ are never copied into the project. Selecting Google Workspace validates a Deskto
 client, or a Web client with `http://localhost:8000/oauth2callback`, stores it in a private
 user directory, and configures `workspace-mcp==1.25.0` over stdio for Codex, Claude Code,
 or Antigravity. Authentication completes on the first Workspace tool call.
+Because Antigravity 2.0 discovers MCP servers from its shared Gemini configuration, an
+Antigravity installation also backs up and atomically merges only the selected server
+definitions into `~/.gemini/config/mcp_config.json`. Unrelated servers are preserved,
+conflicting definitions fail closed, and the generated harness allowlist still controls
+which shared MCPs the project may invoke.
 
 The initial provider catalog contains:
 

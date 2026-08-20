@@ -34,6 +34,17 @@ from scripts.initialize_agent import (
 
 
 class InitializerCoreTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.antigravity_state = tempfile.TemporaryDirectory()
+        self.addCleanup(self.antigravity_state.cleanup)
+        self.antigravity_config = Path(self.antigravity_state.name) / "mcp_config.json"
+        environment = patch.dict(
+            os.environ,
+            {"ANTIGRAVITY_MCP_CONFIG_FILE": str(self.antigravity_config)},
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+
     @property
     def root(self) -> Path:
         return Path(__file__).resolve().parent.parent
@@ -98,6 +109,23 @@ class InitializerCoreTests(unittest.TestCase):
             plan = resolve_plan(self.root, self.spec(destination))
             execute_plan(self.root, plan)
             self.assertTrue((destination / "config" / "persona.yaml").is_file())
+
+    def test_windows_hooks_use_portable_commands_with_the_final_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, patch(
+            "harness.initializer.platform.system", return_value="Windows"
+        ):
+            destination = Path(temporary) / "agent with spaces"
+            plan = resolve_plan(
+                self.root,
+                self.spec(destination, host="codex", documentation_provider="none"),
+            )
+            execute_plan(self.root, plan)
+
+            hooks = json.loads((destination / ".codex" / "hooks.json").read_text())
+            command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+            self.assertIn("uv run --project", command)
+            self.assertIn(str(destination), command)
+            self.assertNotIn("$(git", command)
 
     def test_python_314_is_valid_installation_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -381,6 +409,64 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertEqual(codex, {"atlassian-rovo", "github", "google-workspace"})
         self.assertEqual(antigravity, {"atlassian-rovo", "google-workspace"})
 
+    def test_antigravity_install_publishes_selected_mcps_to_shared_config(self) -> None:
+        self.antigravity_config.write_text(
+            json.dumps({"mcpServers": {"unrelated": {"command": "existing"}}}),
+            encoding="utf-8",
+        )
+        self.antigravity_config.chmod(0o600)
+        destination = Path(self.antigravity_state.name) / "agent"
+        plan = resolve_plan(
+            self.root,
+            self.spec(
+                destination,
+                host="antigravity",
+                documentation_provider="none",
+                capabilities=(),
+                bundles=("atlassian-work",),
+            ),
+        )
+
+        execute_plan(self.root, plan)
+
+        shared = json.loads(self.antigravity_config.read_text(encoding="utf-8"))
+        project = json.loads(
+            (destination / ".agents" / "mcp_config.json").read_text(encoding="utf-8")
+        )
+        backup = self.antigravity_config.with_name(
+            "mcp_config.json.backup-before-terminal-agent-installation"
+        )
+        self.assertEqual(shared["mcpServers"]["unrelated"], {"command": "existing"})
+        self.assertEqual(
+            shared["mcpServers"]["atlassian-rovo"],
+            project["mcpServers"]["atlassian-rovo"],
+        )
+        self.assertTrue(backup.is_file())
+        if os.name == "posix":
+            self.assertEqual(stat.S_IMODE(self.antigravity_config.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
+
+    def test_antigravity_install_refuses_conflicting_shared_mcp(self) -> None:
+        original = {"mcpServers": {"atlassian-rovo": {"command": "other-harness"}}}
+        self.antigravity_config.write_text(json.dumps(original), encoding="utf-8")
+        destination = Path(self.antigravity_state.name) / "agent"
+        plan = resolve_plan(
+            self.root,
+            self.spec(
+                destination,
+                host="antigravity",
+                documentation_provider="none",
+                capabilities=(),
+                bundles=("atlassian-work",),
+            ),
+        )
+
+        with self.assertRaisesRegex(InitializerError, "different definitions"):
+            execute_plan(self.root, plan)
+
+        self.assertFalse(destination.exists())
+        self.assertEqual(json.loads(self.antigravity_config.read_text()), original)
+
     def test_github_mcp_uses_environment_token_without_storing_a_secret(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -661,8 +747,9 @@ class InitializerCoreTests(unittest.TestCase):
                 self.assertIn("google-workspace", config_text)
                 self.assertIn("gmail:readonly", config_text)
                 self.assertIn("workspace-mcp==1.25.0", (destination / "scripts/launch_google_workspace_mcp.py").read_text())
-                self.assertEqual(stat.S_IMODE(installed_client.stat().st_mode), 0o600)
-                self.assertEqual(stat.S_IMODE(installed_client.parent.stat().st_mode), 0o700)
+                if os.name == "posix":
+                    self.assertEqual(stat.S_IMODE(installed_client.stat().st_mode), 0o600)
+                    self.assertEqual(stat.S_IMODE(installed_client.parent.stat().st_mode), 0o700)
                 self.assertFalse(any(destination.rglob("client_secret.json")))
                 generated_text = "\n".join(
                     path.read_text(errors="ignore")
@@ -929,7 +1016,8 @@ class InitializerCoreTests(unittest.TestCase):
                 text=True,
             ).stdout.strip()
             self.assertTrue(hook.is_file())
-            self.assertTrue(hook.stat().st_mode & 0o100)
+            if os.name == "posix":
+                self.assertTrue(hook.stat().st_mode & 0o100)
             self.assertEqual(hooks_path, ".githooks")
             self.assertTrue((destination / "knowledge/runbooks/incident-response.md").is_file())
             self.assertTrue((destination / "knowledge/runbooks/integration-lifecycle.md").is_file())

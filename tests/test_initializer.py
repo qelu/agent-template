@@ -224,7 +224,14 @@ class InitializerTests(unittest.TestCase):
             command,
             capture_output=True,
             text=True,
-            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **(env or {})},
+            env={
+                **os.environ,
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "ANTIGRAVITY_MCP_CONFIG_FILE": str(
+                    destination.parent / ".antigravity-mcp-config.json"
+                ),
+                **(env or {}),
+            },
         )
 
 
