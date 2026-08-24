@@ -7,6 +7,8 @@ the project follows Semantic Versioning.
 
 ### Added
 
+- Added rerunnable prerequisite installers and documentation for macOS, Ubuntu
+  24.04, and Windows.
 - Added secure Google Workspace OAuth configuration for the pinned community
   `workspace-mcp` on Codex, Claude Code, and Antigravity, with selectable services,
   read-only defaults, user-level secrets, and setup receipts.

@@ -18,6 +18,9 @@ is selected. On Windows, Antigravity with Atlassian Rovo resolves `node.exe` and
 npm's `npx-cli.js` to absolute paths before creating the harness so desktop-app
 `PATH` differences do not break OAuth startup.
 
+Repository bootstrap scripts for macOS, Ubuntu 24.04, and Windows are documented
+in [prerequisites.md](prerequisites.md).
+
 ## Wizard flow
 
 1. **Destination** — a new directory or an existing empty directory; existing

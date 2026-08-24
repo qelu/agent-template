@@ -156,6 +156,10 @@ node --version
 npx --version
 ```
 
+OS-specific bootstrap scripts are available for macOS, Ubuntu 24.04, and Windows.
+Review their package-manager and download behavior in the
+[prerequisite installation guide](docs/prerequisites.md) before running them.
+
 Then prepare and validate the template:
 
 ```bash
