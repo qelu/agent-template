@@ -8,16 +8,15 @@ Antigravity already owns the model loop.
 uv run python scripts/initialize_agent.py
 ```
 
-Git, Python 3.11 or newer, `uv`, and Gitleaks are mandatory bootstrap
+Git, Python 3.11 or newer, `uv`, Gitleaks, Node.js, and `npx` are mandatory bootstrap
 requirements and must all be available on `PATH`. The initializer checks them
 before opening the wizard and makes no changes when the preflight fails. The
 optional provisioning step uses `uv` to obtain the selected Python version and
 create a project-local `.venv`; the system Python is never replaced. Host CLIs
 and integration-specific tools are validated only when their host or integration
-is selected. In particular, Antigravity with Atlassian Rovo requires `node` and
-`npx`; on Windows the initializer resolves `node.exe` and npm's `npx-cli.js` to
-absolute paths before creating the harness so desktop-app `PATH` differences do
-not break OAuth startup.
+is selected. On Windows, Antigravity with Atlassian Rovo resolves `node.exe` and
+npm's `npx-cli.js` to absolute paths before creating the harness so desktop-app
+`PATH` differences do not break OAuth startup.
 
 ## Wizard flow
 
@@ -27,10 +26,12 @@ not break OAuth startup.
 3. **Persona** — goal, role, tone, and language.
 4. **Host** — Codex, Claude Code, Antigravity, or portable.
 5. **Documentation** — OpenAI, Anthropic, Gemini, or none.
-6. **Bundles** — optional, transparent shortcuts for related additions.
+6. **Bundles** — optional, transparent shortcuts whose labels list every included
+   capability and integration before selection.
 7. **Capabilities** — required safety skills and selected optional packages.
 8. **Integrations** — active external services supported by the chosen host.
-9. **Environment** — Python, development tools, Gitleaks, and optional host CLI.
+9. **Environment** — Python, development tools, an optional Gitleaks scan, and
+   optional host CLI installation.
 10. **Review** — exact selections and external commands before confirmation.
 
 Use arrows for selection, Space to toggle checkboxes, Enter to continue, and
@@ -136,9 +137,9 @@ permission.
 
 ## Capability selection
 
-`task-planning`, `safe-tool-use`, `manage-project-scope`, `map-skill-command`,
-`skill-auditor`, `import-external-skill`, and `import-template-skills` are
-required. The scope-management skill lets a user ask the
+`task-planning`, `safe-tool-use`, `manage-project-scope`, `manage-mcp-access`,
+`map-skill-command`, `skill-auditor`, `import-external-skill`, and
+`import-template-skills` are required. The scope-management skill lets a user ask the
 generated agent to add an existing project directory with read-only or
 read-write access. It updates the portable scope in `config/policies.yaml` while
 preserving denied paths and treating the host's native workspace boundary
@@ -204,8 +205,8 @@ The first generic catalog also provides dependency review and incident-triage
 skills, incident-response and external-integration-lifecycle runbooks, and an
 optional staged-secret Git hook. Select `governance`, `operations`, or
 `team-baseline` to use reviewed shortcuts whose contents remain visible in the
-plan and receipt. Selecting `pre-commit-secret-scan` requires Gitleaks; on macOS
-the initializer can add an official Homebrew installation to the approval plan.
+plan and receipt. Selecting `pre-commit-secret-scan` enables the generated hook;
+the Gitleaks executable has already passed the mandatory startup preflight.
 
 | Host | Skills directory |
 | --- | --- |
@@ -235,7 +236,10 @@ MCP servers into native host configuration with optional startup behavior. For G
 Workspace, it validates a Desktop OAuth client or a Web client containing
 `http://localhost:8000/oauth2callback`, then copies it to a private user directory and
 configures the pinned community server locally over stdio. On POSIX systems, the source
-must already be private (`chmod 600`).
+must already be private (`chmod 600`). On Windows, access by the current user, SYSTEM,
+and local Administrators is accepted; grants to unrelated users or groups block
+initialization. These local checks cannot prove that Google APIs or OAuth consent scopes
+are enabled in the remote Google Cloud project.
 Generated `docs/integrations.md` covers one-time
 authentication, read-only smoke testing, scope review, and write-confirmation checks.
 When Antigravity and `atlassian-rovo` are selected, interactive initialization offers to
@@ -256,21 +260,31 @@ The generated guidance reminds users to enable the matching Google APIs and comp
 browser authentication on the first tool call. The `atlassian-work`,
 `github-work`, and `google-workspace` bundles add the relevant lifecycle guidance.
 
+| Bundle | Capabilities installed | Integrations configured |
+| --- | --- | --- |
+| `governance` | `evidence-gathering`, `dependency-change-review`, `documentation-maintenance`, `post-work-review` | None |
+| `operations` | `incident-triage`, `incident-response`, `integration-lifecycle`, `pre-commit-secret-scan` | None |
+| `team-baseline` | All `governance` and `operations` capabilities | None |
+| `atlassian-work` | `integration-lifecycle`, `post-work-review` | `atlassian-rovo` |
+| `github-work` | `evidence-gathering`, `integration-lifecycle` | `github` |
+| `google-workspace` | `integration-lifecycle` | `google-workspace` |
+
 ## Installation scope
 
 | Requirement | Behavior |
 | --- | --- |
 | Python | Python 3.11–3.14 obtained by `uv` when provisioning; system Python remains unchanged. |
+| Node.js | Mandatory baseline prerequisite; both `node` and `npx` must be on `PATH` before the wizard starts. |
 | Python packages | Installed into the generated `.venv` only when `--install` is selected. |
 | Development tools | Ruff, pytest, mypy, and pre-commit from the dev extra when provisioning with development tools enabled. |
-| Gitleaks | Run only when selected. The wizard detects it before offering the scan and can plan an official Homebrew install on macOS. |
+| Gitleaks | Mandatory baseline prerequisite; optional scans and the staged hook use the detected executable. |
 | Staged secret hook | Optional; enables the generated repository's local `.githooks/pre-commit` and requires Gitleaks. |
 | Codex CLI | Optional explicit installation using the official npm package. |
 | Claude Code | Optional explicit installation using the official npm package. |
 | Antigravity CLI | Detected as `agy`; use Google's official installer when absent. The initializer does not pipe a remote script into a shell. |
 | Provider SDKs | Never installed. |
 | Provider integrations | Codex and Claude use project-local MCP configuration. Antigravity 2.0 receives both a project manifest and a safe merge of selected integrations into `~/.gemini/config/mcp_config.json`, while the project allowlist controls use. Google Workspace launches a pinned package through a generated secret-safe wrapper. |
-| Credentials | Never written to the generated project. The Google OAuth source must have mode `0600` and is copied to a user-only configuration directory. |
+| Credentials | Never written to the generated project. The Google OAuth source must have mode `0600` on POSIX or no unrelated-user ACL grants on Windows, and is copied to a user-only configuration directory. |
 
 ## Transaction and validation
 
@@ -336,12 +350,12 @@ uv run python scripts/initialize_agent.py \
 | `--python VERSION` | Python 3.11–3.14 passed to `uv`; defaults to 3.13. |
 | `--install` | Provision and validate the generated project. |
 | `--dev-tools` / `--no-dev-tools` | Include or omit development tools. |
-| `--security-tools` | Run Gitleaks; on macOS, a missing binary can be installed through Homebrew after plan approval. |
+| `--security-tools` | Run a Gitleaks scan during initialization; the executable is a mandatory startup prerequisite. |
 | `--install-host-tool` | Plan an approved Codex or Claude Code CLI installation when absent. |
 | `--google-workspace-client PATH` | Existing Google Desktop OAuth client, or Web client with `http://localhost:8000/oauth2callback`; required when Google Workspace is selected. |
 | `--google-workspace-service SERVICE` | Workspace service to configure; repeat as needed. Defaults to Gmail, Drive, and Calendar. |
 | `--google-workspace-readonly` / `--no-google-workspace-readonly` | Keep selected services read-only (default) or request full service scopes. |
-| `--yes` | Approve external commands non-interactively. |
+| `--yes` | Approve external commands and user-level integration setup non-interactively. |
 | `--dry-run` | Print the plan without writing. |
 | `--no-color` | Disable terminal color. |
 

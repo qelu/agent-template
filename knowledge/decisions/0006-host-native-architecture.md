@@ -6,8 +6,9 @@
 ## Context
 
 The template is installed inside Codex, Claude Code, or Antigravity projects.
-Each host already owns inference, authentication, sessions, tool dispatch,
-permissions, and sandboxing. A second provider SDK runtime duplicated those
+Each host already owns inference, host authentication, sessions, tool dispatch,
+permissions, and sandboxing. Selected external integrations retain their own
+provider authentication. A second model-provider SDK runtime duplicated the host
 responsibilities, introduced separate token billing, and could not automatically
 intercept work performed by the actual host.
 
@@ -37,7 +38,9 @@ enforced and is never treated as blanket plan approval.
 
 ## Consequences
 
-Generated projects are smaller and do not require provider API keys or separate
-SDK token billing. The repository no longer claims enforcement through a model
-runtime that the selected host bypasses. Host conformance tests and documentation
-must evolve with the supported products' native configuration contracts.
+Generated projects are smaller and do not require model-provider API keys or
+separate SDK token billing. Selected integrations may still require their own
+OAuth clients or credentials. The repository no longer claims enforcement through
+a model runtime that the selected host bypasses. Host conformance tests and
+documentation must evolve with the supported products' native configuration
+contracts.

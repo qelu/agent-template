@@ -15,15 +15,18 @@ Install a lean, governed agent workspace without replacing the host's model runt
 
 > [!IMPORTANT]
 > This template runs *inside* an agent host. Codex, Claude Code, or Antigravity
-> owns inference, authentication, session persistence, sandboxing, and tool
-> execution. The template supplies project instructions, skills, MCP servers,
-> native permissions and hooks, validation, and auditable installation metadata.
+> owns model inference, host authentication, session persistence, sandboxing, and
+> tool execution. Selected external integrations retain their own provider
+> authentication and API boundaries. The template supplies project instructions,
+> skills, MCP servers, native permissions and hooks, validation, and auditable
+> installation metadata.
 
 ## What this is
 
 Agent Template creates a project-level harness for an existing coding-agent host.
-It does not call a provider API, install a provider SDK, or implement another model
-loop. Selecting a host is selecting the runtime.
+It does not call a model inference API, install a model provider SDK, or implement
+another model loop. Selected MCP integrations can call their providers after the
+user authenticates them. Selecting a host is selecting the runtime.
 
 It is intended for developers and teams that need portable, auditable,
 least-authority behavior across coding-agent hosts. It favors explicit policy,
@@ -139,6 +142,7 @@ Install every mandatory prerequisite before launching the initializer:
 - [Python](https://www.python.org/downloads/) 3.11 or newer.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/), available as `uv` on `PATH`.
 - [Gitleaks](https://github.com/gitleaks/gitleaks#installing), available as `gitleaks` on `PATH`.
+- [Node.js](https://nodejs.org/en/download) LTS, with both `node` and `npx` on `PATH`.
 
 The initializer performs this preflight before opening the wizard and exits without
 creating or changing a harness if any prerequisite is missing. Verify them with:
@@ -148,6 +152,8 @@ git --version
 python --version
 uv --version
 gitleaks version
+node --version
+npx --version
 ```
 
 Then prepare and validate the template:
@@ -203,6 +209,7 @@ config/policies.yaml               portable authority and safety intent
 config/capabilities.yaml           selected capability manifest
 config/integrations.yaml           selected external-integration manifest
 scripts/guardrails/                shared policy evaluator plus one bridge per host
+scripts/update_mcp_access.py       host-independent MCP allowlist manager
 scripts/update_scope.py            host-independent project-scope launcher
 scripts/validate_harness.py        generated-project conformance check
 <host-native files>                instructions, permissions, hooks, MCP
@@ -210,8 +217,9 @@ scripts/validate_harness.py        generated-project conformance check
 ```
 
 It does **not** add a second model runtime or a parallel lifecycle system. The
-selected host remains responsible for inference, authentication, sessions,
-sandboxing, and tool execution.
+selected host remains responsible for inference, host authentication, sessions,
+sandboxing, and tool execution. External services use their documented provider
+authentication separately.
 
 ## Run IDs and plans
 
@@ -257,6 +265,7 @@ Every generated harness includes these required skills:
 
 - `task-planning` and `safe-tool-use` for bounded work and tool authority;
 - `manage-project-scope` for adding project directories without weakening denied paths;
+- `manage-mcp-access` for reviewing and changing the project MCP allowlist;
 - `map-skill-command` for creating short aliases for installed skills;
 - `skill-auditor` for static inspection without executing candidate content;
 - `import-external-skill` for explicit imports from immutable external sources; and
@@ -278,6 +287,17 @@ preserves those defaults; supplying the flag one or more times selects only thos
 optional IDs. Named bundles are transparent shortcuts for related capabilities and
 integrations; their expanded selections appear in the dry-run plan and receipt.
 
+The wizard also shows this expansion directly in every bundle choice:
+
+| Bundle | Capabilities | Integrations |
+| --- | --- | --- |
+| `governance` | `evidence-gathering`, `dependency-change-review`, `documentation-maintenance`, `post-work-review` | None |
+| `operations` | `incident-triage`, `incident-response`, `integration-lifecycle`, `pre-commit-secret-scan` | None |
+| `team-baseline` | All capabilities from `governance` and `operations` | None |
+| `atlassian-work` | `integration-lifecycle`, `post-work-review` | `atlassian-rovo` |
+| `github-work` | `evidence-gathering`, `integration-lifecycle` | `github` |
+| `google-workspace` | `integration-lifecycle` | `google-workspace` |
+
 ## External integrations
 
 `config/integrations.yaml` is a separate, optional catalog for remote and local MCP servers,
@@ -287,7 +307,10 @@ Generated projects contain the selected manifest and `docs/integrations.md`. Cre
 are never copied into the project. Selecting Google Workspace validates a Desktop OAuth
 client, or a Web client with `http://localhost:8000/oauth2callback`, stores it in a private
 user directory, and configures `workspace-mcp==1.25.0` over stdio for Codex, Claude Code,
-or Antigravity. Authentication completes on the first Workspace tool call.
+or Antigravity. The selected OAuth JSON must pass content and local-file permission
+validation before initialization can continue. This local check cannot determine whether
+the corresponding Google APIs and consent scopes are enabled remotely. Authentication
+completes on the first Workspace tool call.
 Because Antigravity 2.0 discovers MCP servers from its shared Gemini configuration, an
 Antigravity installation also backs up and atomically merges only the selected server
 definitions into `~/.gemini/config/mcp_config.json`. Unrelated servers are preserved,
@@ -305,8 +328,8 @@ The initial provider catalog contains:
 
 The `governance`, `operations`, and `team-baseline` bundles provide transparent
 shortcuts over the provider-neutral catalog. The staged-secret hook is optional,
-uses the official Gitleaks command, requires Gitleaks to be present or explicitly
-installed, and configures only the generated repository's local Git hooks path.
+uses the mandatory Gitleaks prerequisite, and configures only the generated
+repository's local Git hooks path.
 
 From a generated harness, project scope can be updated consistently on every host:
 

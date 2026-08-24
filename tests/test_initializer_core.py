@@ -20,6 +20,8 @@ from harness.initializer import (
     capability_choices,
     destination_error,
     execute_plan,
+    google_workspace_client_permissions_error,
+    google_workspace_client_preflight_error,
     integration_choices,
     provision_and_validate,
     resolve_plan,
@@ -29,6 +31,7 @@ from harness.initializer import (
 from scripts.initialize_agent import (
     ATLASSIAN_ROVO_ENDPOINT,
     bootstrap_atlassian_rovo,
+    bundle_label,
     host_cli_unavailable_message,
     main as initialize_main,
     require_initializer_prerequisites,
@@ -113,6 +116,21 @@ class InitializerCoreTests(unittest.TestCase):
             execute_plan(self.root, plan)
             self.assertTrue((destination / "config" / "persona.yaml").is_file())
 
+    def test_bundle_label_discloses_every_installed_item(self) -> None:
+        label = bundle_label(
+            "work",
+            {
+                "description": "Work helpers.",
+                "capabilities": ["review", "triage"],
+                "integrations": ["tickets"],
+            },
+        )
+
+        self.assertEqual(
+            label,
+            "work — Work helpers. [capabilities: review, triage; integrations: tickets]",
+        )
+
     def test_windows_hooks_avoid_quoted_absolute_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary, patch(
             "harness.initializer.platform.system", return_value="Windows"
@@ -193,6 +211,12 @@ class InitializerCoreTests(unittest.TestCase):
                 assert isinstance(kwargs, dict)
                 choices = kwargs["choices"]
                 assert isinstance(choices, list)
+                self.assertTrue(
+                    all(
+                        "capabilities:" in choice.title and "integrations:" in choice.title
+                        for choice in choices
+                    )
+                )
                 return [choice.value for choice in choices]
             if message.startswith("Google Workspace services"):
                 return list(GOOGLE_WORKSPACE_DEFAULT_SERVICES)
@@ -619,14 +643,14 @@ class InitializerCoreTests(unittest.TestCase):
         self.assertEqual(inner_command, (str(node), str(npx_cli)))
         self.assertNotIn(str(npx), inner_command)
 
-    def test_antigravity_rovo_requires_node_and_npx_before_creation(self) -> None:
+    def test_node_and_npx_are_hard_prerequisites_before_creation(self) -> None:
         def find(command: str) -> str | None:
             return None if command == "npx" else f"/tools/{command}"
 
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch("harness.initializer.shutil.which", side_effect=find),
-            self.assertRaisesRegex(InitializerError, "requires Node.js commands.*npx"),
+            self.assertRaisesRegex(InitializerError, "prerequisites: npx"),
         ):
             resolve_plan(
                 self.root,
@@ -939,6 +963,33 @@ class InitializerCoreTests(unittest.TestCase):
                     ),
                 )
 
+    def test_google_workspace_rejects_broad_windows_acl_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            client = self.google_client(Path(temporary))
+            broad_acl = subprocess.CompletedProcess([], 3, stdout="", stderr="")
+            with (
+                patch("harness.initializer.os.name", "nt"),
+                patch("harness.initializer.platform.system", return_value="Windows"),
+                patch("harness.initializer.shutil.which", return_value="powershell.exe"),
+                patch("harness.initializer.subprocess.run", return_value=broad_acl) as run,
+            ):
+                error = google_workspace_client_permissions_error(client)
+
+        self.assertIn("unrelated Windows users or groups", error or "")
+        self.assertIn("powershell.exe", run.call_args.args[0])
+
+    def test_google_workspace_preflight_combines_content_and_permissions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            client = self.google_client(Path(temporary))
+            with patch(
+                "harness.initializer.google_workspace_client_permissions_error",
+                return_value="unsafe permissions",
+            ):
+                self.assertEqual(
+                    google_workspace_client_preflight_error(client),
+                    "unsafe permissions",
+                )
+
     def test_google_workspace_refuses_to_overwrite_a_different_client(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1144,7 +1195,7 @@ class InitializerCoreTests(unittest.TestCase):
             patch("scripts.initialize_agent.shutil.which", side_effect=find),
             self.assertRaisesRegex(
                 InitializerError,
-                "commands on PATH: uv, gitleaks",
+                "commands on PATH: uv, gitleaks, node, npx",
             ),
         ):
             require_initializer_prerequisites()

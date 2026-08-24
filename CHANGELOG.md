@@ -25,8 +25,10 @@ the project follows Semantic Versioning.
 
 ### Changed
 
-- Git, Python 3.11+, uv, and Gitleaks are now mandatory initializer prerequisites;
-  missing baseline tooling fails before the interactive wizard starts.
+- Git, Python 3.11+, uv, Gitleaks, Node.js, and `npx` are now mandatory initializer
+  prerequisites; missing baseline tooling fails before the interactive wizard starts.
+- Made Google Workspace OAuth content and local permissions blocking at selection,
+  and expanded bundle labels to show every included capability and integration.
 - Antigravity 2.0 installations now preserve and back up the shared MCP configuration,
   atomically publish selected integrations for discovery, and refuse conflicting server
   definitions while retaining the generated per-harness execution allowlist.

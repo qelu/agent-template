@@ -23,8 +23,9 @@ receipt records whether they were selected during initialization.
 
 The installation choices are recorded in
 `.agent-harness/installation.yaml`. `execution: host-native` means the selected
-host owns inference, authentication, sessions, sandboxing, and tool execution.
-No provider SDK or duplicate model runtime is installed.
+host owns inference, host authentication, sessions, sandboxing, and tool
+execution. Selected external integrations authenticate separately with their
+providers. No model provider SDK or duplicate model runtime is installed.
 
 Optional external services selected during initialization are listed in
 `config/integrations.yaml`. When the list is non-empty, follow
@@ -92,6 +93,24 @@ python3 scripts/update_scope.py \
 Policy scope does not override the selected host's native sandbox or workspace
 boundary. If the host still blocks the folder, add it through the host's normal
 workspace controls rather than weakening safety settings.
+
+## Manage MCP access
+
+The harness can invoke only MCP servers in `config/policies.yaml`, even when the
+host exposes additional global servers. Ask the agent to review a change, for
+example:
+
+> Enable the `atlassian-rovo` MCP for this harness.
+
+The required `manage-mcp-access` skill updates only this project's allowlist; it
+does not install, authenticate, hide, or alter globally configured MCP servers.
+The host-independent launcher also supports direct inspection:
+
+```bash
+python3 scripts/update_mcp_access.py \
+  --root /path/to/this/harness \
+  --list
+```
 
 ## Map slash commands to skills
 
