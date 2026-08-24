@@ -28,10 +28,11 @@ release supply chain.
 This project adds project-level instructions, native host settings, pre-tool
 allow/ask/deny decisions, path scope, and validation; it is not a model runtime
 or operating-system sandbox.
-Deployments must still rely on the selected host for authentication, sandboxing,
-and tool authorization, isolate credentials, review host permissions, and treat
-model output and fetched content as untrusted input. Semantic plan approval is a
-behavioral contract unless the host exposes a trustworthy approval event.
+Deployments must still rely on the selected host for host authentication,
+sandboxing, and tool authorization. Operators must separately protect selected
+integration credentials, review host permissions, and treat model output and
+fetched content as untrusted input. Semantic plan approval is a behavioral
+contract unless the host exposes a trustworthy approval event.
 
 The base portable policy allows scoped reads, asks for scoped writes and external
 side effects, asks for unknown actions, and denies deletion. `denied_paths`

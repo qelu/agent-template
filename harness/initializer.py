@@ -45,7 +45,7 @@ GOOGLE_WORKSPACE_DEFAULT_SERVICES = ("gmail", "drive", "calendar")
 GOOGLE_WORKSPACE_MCP_VERSION = "1.25.0"
 GOOGLE_WORKSPACE_REDIRECT_URI = "http://localhost:8000/oauth2callback"
 ANTIGRAVITY_MCP_CONFIG_ENV = "ANTIGRAVITY_MCP_CONFIG_FILE"
-BASELINE_PREREQUISITES = ("git", "uv", "gitleaks")
+BASELINE_PREREQUISITES = ("git", "uv", "gitleaks", "node", "npx")
 ATLASSIAN_ROVO_ENDPOINT = "https://mcp.atlassian.com/v1/mcp/authv2"
 DEFAULT_DOCUMENTATION_PROVIDER = {
     "portable": "none",
@@ -380,6 +380,70 @@ def google_workspace_client_error(path: Path) -> str | None:
     return None
 
 
+def google_workspace_client_permissions_error(path: Path) -> str | None:
+    """Return an error when an OAuth client is readable by unrelated local users."""
+    candidate = path.expanduser()
+    if os.name == "posix":
+        try:
+            exposed = stat.S_IMODE(candidate.stat().st_mode) & 0o077
+        except OSError:
+            return "Google Workspace OAuth client permissions cannot be inspected"
+        if exposed:
+            return (
+                "Google Workspace OAuth client must not be group- or world-readable; "
+                f"run `chmod 600 {candidate}` and retry"
+            )
+        return None
+    if platform.system() != "Windows":
+        return None
+
+    powershell = shutil.which("powershell") or shutil.which("pwsh")
+    if powershell is None:
+        return "PowerShell is required to verify Google Workspace OAuth client permissions"
+    acl_check = r"""
+$current = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$allowed = @($current, 'S-1-5-18', 'S-1-5-32-544')
+$broad = (Get-Acl -LiteralPath $args[0]).Access | Where-Object {
+  $_.AccessControlType -eq 'Allow' -and
+  $allowed -notcontains $_.IdentityReference.Translate(
+    [System.Security.Principal.SecurityIdentifier]
+  ).Value
+}
+if ($broad) { exit 3 }
+"""
+    try:
+        result = subprocess.run(
+            [
+                powershell,
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                acl_check,
+                str(candidate),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return "Google Workspace OAuth client permissions cannot be inspected"
+    if result.returncode == 3:
+        return (
+            "Google Workspace OAuth client grants access to unrelated Windows users or groups; "
+            "remove inherited access and grant Full Control only to the current user, SYSTEM, "
+            "and local Administrators, then retry"
+        )
+    if result.returncode != 0:
+        return "Google Workspace OAuth client permissions cannot be inspected safely"
+    return None
+
+
+def google_workspace_client_preflight_error(path: Path) -> str | None:
+    """Validate both OAuth content and local file protection before initialization."""
+    return google_workspace_client_error(path) or google_workspace_client_permissions_error(path)
+
+
 def google_workspace_config_dir() -> Path:
     configured = os.environ.get("GOOGLE_WORKSPACE_MCP_CONFIG_DIR")
     return (
@@ -473,17 +537,9 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
             raise InitializerError(
                 "Google Workspace requires --google-workspace-client with an OAuth client JSON"
             )
-        if error := google_workspace_client_error(google_workspace_client_source):
+        if error := google_workspace_client_preflight_error(google_workspace_client_source):
             raise InitializerError(
                 f"{error}. Provide --google-workspace-client with a Desktop or Web OAuth client JSON"
-            )
-        if (
-            os.name == "posix"
-            and stat.S_IMODE(google_workspace_client_source.stat().st_mode) & 0o077
-        ):
-            raise InitializerError(
-                "Google Workspace OAuth client must not be group- or world-readable; "
-                f"run `chmod 600 {google_workspace_client_source}` and retry"
             )
         if google_workspace_client_target.exists():
             if error := google_workspace_client_error(google_workspace_client_target):
@@ -507,8 +563,6 @@ def resolve_plan(source: Path, spec: InitializationSpec) -> InstallationPlan:
     if host_command:
         tools_to_check.append(host_command[0])
     antigravity_rovo = host == "antigravity" and "atlassian-rovo" in selected_integrations
-    if antigravity_rovo:
-        tools_to_check.extend(("node", "npx"))
     selected_cli_integrations = [
         active_integrations[integration_id]
         for integration_id in selected_integrations
@@ -680,7 +734,7 @@ def configure_google_workspace_mcp(plan: InstallationPlan) -> None:
     target = plan.google_workspace_client_target
     if source is None or target is None:
         return
-    if error := google_workspace_client_error(source):
+    if error := google_workspace_client_preflight_error(source):
         raise InitializerError(f"Google Workspace OAuth client changed after approval: {error}")
     if target.parent.is_symlink() or target.is_symlink():
         raise InitializerError(f"Unsafe Google Workspace OAuth client target: {target}")

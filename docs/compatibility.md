@@ -48,9 +48,10 @@ The generated profiles currently use these host-native events:
 | Antigravity | `PreInvocation` | `PreToolUse` | The hook injects prompt context and returns native allow, ask, or deny decisions. |
 | Portable | Host-defined | Host-defined | The portable contract and policy are supplied without a generated native bridge. |
 
-The selected host owns inference, authentication, sessions, sandboxing, tool
-dispatch, and the final native protocol. Agent Template owns the generated
-configuration, the portable policy semantics, strict parsing, and bridge behavior.
+The selected host owns inference, host authentication, sessions, sandboxing, tool
+dispatch, and the final native protocol. Selected integrations retain their own
+provider authentication boundaries. Agent Template owns the generated configuration,
+the portable policy semantics, strict parsing, and bridge behavior.
 When an upstream host changes its native contract, the project updates the
 corresponding profile and conformance fixtures.
 

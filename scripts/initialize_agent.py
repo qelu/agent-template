@@ -30,7 +30,7 @@ from harness.initializer import (  # noqa: E402
     capability_choices,
     destination_error,
     execute_plan,
-    google_workspace_client_error,
+    google_workspace_client_preflight_error,
     integration_choices,
     load_initializer_config,
     resolve_plan,
@@ -100,6 +100,16 @@ def host_cli_unavailable_message(host: str, binary: str) -> str:
             " This checks the terminal CLI only; the Codex desktop app may still be installed."
         )
     return message
+
+
+def bundle_label(bundle_id: str, bundle: dict[str, Any]) -> str:
+    """Show the exact bundle expansion at selection time."""
+    capabilities = ", ".join(bundle["capabilities"]) or "none"
+    integrations = ", ".join(bundle["integrations"]) or "none"
+    return (
+        f"{bundle_id} — {bundle['description']} "
+        f"[capabilities: {capabilities}; integrations: {integrations}]"
+    )
 
 
 def parser() -> argparse.ArgumentParser:
@@ -310,7 +320,7 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
                 "Bundles — transparent shortcuts for related optional features",
                 choices=[
                     Choice(
-                        f"{bundle_id} — {bundle['description']}",
+                        bundle_label(bundle_id, bundle),
                         value=bundle_id,
                         checked=False,
                     )
@@ -320,8 +330,8 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
         )
     for bundle_id, bundle in incompatible_bundles.items():
         console.print(
-            f"  [yellow]–[/yellow] {bundle_id} [dim](unavailable for {host}) — "
-            f"{bundle['description']}[/dim]"
+            f"  [yellow]–[/yellow] [dim](unavailable for {host}) "
+            f"{bundle_label(bundle_id, bundle)}[/dim]"
         )
     bundled_capabilities = {
         capability
@@ -445,7 +455,9 @@ def wizard_spec(source: Path, *, no_color: bool) -> InitializationSpec:
             _ask(
                 questionary.path(
                     "Google OAuth client JSON",
-                    validate=lambda value: google_workspace_client_error(Path(value)) or True,
+                    validate=lambda value: (
+                        google_workspace_client_preflight_error(Path(value)) or True
+                    ),
                 )
             )
         )
