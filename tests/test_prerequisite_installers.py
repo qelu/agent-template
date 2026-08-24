@@ -23,6 +23,7 @@ class PrerequisiteInstallerTests(unittest.TestCase):
                 for command in expected:
                     self.assertIn(command, content)
 
+    @unittest.skipIf(os.name == "nt", "POSIX executable bits are not represented on Windows")
     def test_posix_installers_are_executable(self) -> None:
         for installer in (MACOS, UBUNTU):
             with self.subTest(installer=installer.name):
@@ -46,6 +47,7 @@ class PrerequisiteInstallerTests(unittest.TestCase):
         ):
             self.assertIn(package, content)
 
+    @unittest.skipIf(os.name == "nt", "Windows bash may resolve to an unconfigured WSL")
     @unittest.skipUnless(shutil.which("bash"), "Bash is required for syntax validation")
     def test_posix_installers_have_valid_bash_syntax(self) -> None:
         for installer in (MACOS, UBUNTU):
